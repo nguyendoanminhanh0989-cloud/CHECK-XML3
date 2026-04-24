@@ -32,6 +32,8 @@ const defaultConfig: ValidationConfig = {
 export default function App() {
   // Auth State
   const [clinicCode, setClinicCode] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminClinics, setAdminClinics] = useState<any[]>([]);
   const [authStatus, setAuthStatus] = useState<'loading' | 'auth' | 'unauth'>('loading');
   const [inputCode, setInputCode] = useState('');
   const [authMessage, setAuthMessage] = useState('');
@@ -61,17 +63,43 @@ export default function App() {
   // INITIAL LOAD
   useEffect(() => {
     const code = localStorage.getItem('clinic_code');
-    if (code) {
+    if (code === '020609') {
+      setClinicCode('020609');
+      setIsAdmin(true);
+      setAuthStatus('auth');
+      loadAdminClinics();
+    } else if (code) {
       checkClinicAuth(code);
     } else {
       setAuthStatus('unauth');
     }
   }, []);
 
+  const loadAdminClinics = async () => {
+    const { data } = await supabase.from('clinics').select('id, created_at, status').order('created_at', { ascending: false });
+    if (data) setAdminClinics(data);
+  };
+
+  const handleDeleteClinic = async (id: string) => {
+    if (!window.confirm(`Xác nhận XÓA VĨNH VIỄN toàn bộ danh mục của cơ sở [${id}]? Hành động này không thể hoàn tác.`)) return;
+    await supabase.from('clinics').delete().eq('id', id);
+    loadAdminClinics();
+  };
+
   const checkClinicAuth = async (code: string) => {
     setAuthStatus('loading');
     setAuthMessage('');
     try {
+      if (code === '020609') {
+        setClinicCode('020609');
+        setIsAdmin(true);
+        setAuthStatus('auth');
+        localStorage.setItem('clinic_code', '020609');
+        loadAdminClinics();
+        return;
+      }
+      setIsAdmin(false);
+
       if (code === 'GUEST') {
         setClinicCode('GUEST');
         setAuthStatus('auth');
@@ -116,6 +144,7 @@ export default function App() {
   };
 
   const handleGuest = () => {
+    setIsAdmin(false);
     setClinicCode('GUEST');
     localStorage.setItem('clinic_code', 'GUEST');
     setAuthStatus('auth');
@@ -123,6 +152,7 @@ export default function App() {
 
   const handleLogout = () => {
     setClinicCode(null);
+    setIsAdmin(false);
     localStorage.removeItem('clinic_code');
     setAuthStatus('unauth');
   };
@@ -417,6 +447,70 @@ export default function App() {
             </button>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  // ADMIN DASHBOARD SCREEN
+  if (isAdmin) {
+    return (
+      <div className="min-h-screen bg-[#f1f6f4] text-slate-800 font-sans pb-12">
+        <header className="sticky top-0 z-30 bg-slate-900 text-white shadow-md px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="bg-gradient-to-br from-indigo-500 to-purple-600 p-2 rounded-xl shadow-md text-white">
+              <ShieldCheck size={24} />
+            </div>
+            <div className="flex flex-col">
+              <h1 className="text-xl font-bold tracking-tight leading-none">QUẢN TRỊ HỆ THỐNG</h1>
+              <p className="text-[11px] font-bold text-indigo-300 tracking-wider mt-1 uppercase">Admin: NGUYỄN ĐOÀN MINH ÁNH</p>
+            </div>
+          </div>
+          <button onClick={handleLogout} className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors font-bold text-sm">
+            <LogOut size={16} /> Đăng Xuất
+          </button>
+        </header>
+        <main className="p-6 max-w-[1000px] mx-auto mt-6">
+          <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div>
+                <h2 className="text-xl font-black text-slate-800 flex items-center gap-2"><Database className="text-indigo-500"/> Danh sách Không gian Dữ liệu</h2>
+                <p className="text-sm text-slate-500 font-medium mt-1">Quản lý các cơ sở KCB đang sử dụng phần mềm đối chiếu Đám Mây.</p>
+              </div>
+              <div className="bg-indigo-50 text-indigo-700 px-4 py-2 rounded-xl font-bold text-sm border border-indigo-100">
+                Tổng cộng: {adminClinics.length} cơ sở
+              </div>
+            </div>
+            <div className="p-0">
+              <table className="w-full text-left">
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    <th className="px-6 py-4 font-bold text-slate-500 text-xs uppercase tracking-wider w-1/3">Mã Cơ Sở KCB</th>
+                    <th className="px-6 py-4 font-bold text-slate-500 text-xs uppercase tracking-wider w-1/3">Thời Gian Bắt Đầu Dùng</th>
+                    <th className="px-6 py-4 font-bold text-slate-500 text-xs uppercase tracking-wider text-right">Quyền Quản Trị</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {adminClinics.map((c) => (
+                    <tr key={c.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-6 py-4 font-mono font-bold text-indigo-700 text-sm">{c.id}</td>
+                      <td className="px-6 py-4 text-slate-600 text-sm font-medium">{new Date(c.created_at).toLocaleString('vi-VN')}</td>
+                      <td className="px-6 py-4 text-right">
+                        <button onClick={() => handleDeleteClinic(c.id)} className="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-lg transition-colors inline-flex items-center gap-1.5 font-bold text-xs uppercase">
+                          <Trash2 size={16} /> Thu hồi & Xóa Data
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {adminClinics.length === 0 && (
+                    <tr>
+                      <td colSpan={3} className="px-6 py-12 text-center text-slate-400 font-medium">Chưa có cơ sở nào đăng ký dữ liệu.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </main>
       </div>
     );
   }
