@@ -81,23 +81,23 @@ export default function App() {
       const { data, error } = await supabase.from('clinics').select('status, config').eq('id', code).single();
       
       if (error && error.code === 'PGRST116') {
-        // Not found => Register
-        const { error: insertErr } = await supabase.from('clinics').insert([{ id: code, status: 'pending', config: defaultConfig }]);
+        // Not found => Tự động tạo kho dữ liệu mới cho mã này
+        const { error: insertErr } = await supabase.from('clinics').insert([{ id: code, status: 'approved', config: defaultConfig }]);
         if (insertErr) {
-          // If error is about table not existing, we provide a helpful message
-          setAuthMessage('Tính năng Đám mây đang bảo trì (Chưa có bảng Clinics trên Supabase). Vui lòng dùng tính năng Khách.');
+          setAuthMessage('Chưa có bảng "clinics" trên Supabase. Vui lòng chạy lệnh SQL tạo bảng trước!');
           setAuthStatus('unauth');
           return;
         }
-        setAuthMessage(`Mã [${code}] đã gửi Yêu Cầu Đăng Ký. Hãy liên hệ Email nguyendoanminhanh0989@gmail.com để được phê duyệt!`);
-        setAuthStatus('unauth');
-      } else if (data?.status === 'pending') {
-        setAuthMessage(`Mã [${code}] vẫn đang chờ phê duyệt. Vui lòng liên hệ Admin (nguyendoanminhanh0989@gmail.com)`);
-        setAuthStatus('unauth');
-      } else if (data?.status === 'approved') {
         setClinicCode(code);
         localStorage.setItem('clinic_code', code);
-        if (data.config) {
+        setConfig(defaultConfig);
+        localStorage.setItem('check_xml_config_v3', JSON.stringify(defaultConfig));
+        setAuthStatus('auth');
+      } else {
+        // Đã tồn tại => Tải cấu hình và vào thẳng
+        setClinicCode(code);
+        localStorage.setItem('clinic_code', code);
+        if (data?.config) {
            setConfig(data.config);
            localStorage.setItem('check_xml_config_v3', JSON.stringify(data.config));
         }
@@ -350,27 +350,28 @@ export default function App() {
               <ShieldCheck size={40} />
             </div>
             <h1 className="text-2xl font-black text-slate-800 tracking-tight">CHECK-XML3-ANHIT</h1>
-            <p className="text-sm font-medium text-slate-500 mt-2 text-center">Hệ thống Đối chiếu Dữ liệu Đám Mây</p>
+            <p className="text-sm font-medium text-slate-500 mt-2 text-center">Mỗi Mã đăng ký là một Không gian dữ liệu riêng biệt</p>
           </div>
 
           {authMessage && (
-            <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm font-medium text-amber-800 text-center flex flex-col gap-2">
-              <AlertTriangle className="mx-auto text-amber-500" size={24} />
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-sm font-medium text-red-800 text-center flex flex-col gap-2">
+              <AlertTriangle className="mx-auto text-red-500" size={24} />
               {authMessage}
             </div>
           )}
 
           <div className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Mã Đăng Ký Phòng Khám</label>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Nhập Mã Cơ Sở (KCB)</label>
               <div className="relative">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                 <input 
                   type="text" 
                   value={inputCode}
                   onChange={(e) => setInputCode(e.target.value.toUpperCase())}
-                  placeholder="VD: 48225, 49917..."
-                  className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-mono font-bold tracking-wider focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                  onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+                  placeholder="Ví dụ: 48225, 49917..."
+                  className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-mono font-bold tracking-wider focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all uppercase"
                 />
               </div>
             </div>
