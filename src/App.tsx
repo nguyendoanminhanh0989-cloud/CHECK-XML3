@@ -182,15 +182,15 @@ export default function App() {
         const mapped: DVKTRecord[] = data.map((row: any, index) => {
           return {
             id: `rec-${fileIndex}-${index}-${Date.now()}`,
-            MA_LK: String(getCol(row, ['MA_LK', 'MaBN', 'Mã LK', 'Mã BN'])),
-            MA_DICH_VU: String(getCol(row, ['MA_DICH_VU', 'MA_THUOC', 'MaDVKT', 'Mã DVKT'])),
-            TEN_DICH_VU: String(getCol(row, ['TEN_DICH_VU', 'TEN_THUOC', 'TenDVKT', 'Tên DVKT'])),
+            MA_LK: String(getCol(row, ['MA_LK', 'MaBN', 'Mã LK', 'Mã BN']) || '').trim().toUpperCase(),
+            MA_DICH_VU: String(getCol(row, ['MA_DICH_VU', 'MA_THUOC', 'MaDVKT', 'Mã DVKT']) || '').trim().toUpperCase(),
+            TEN_DICH_VU: String(getCol(row, ['TEN_DICH_VU', 'TEN_THUOC', 'TenDVKT', 'Tên DVKT']) || '').trim(),
             NGAY_YL: parseDateString(getCol(row, ['NGAYGIO_YL', 'NGAY_YL', 'ThoiGianYLenh', 'Ngày Y lệnh'])),
             NGAY_TH_YL: parseDateString(getCol(row, ['NGAYGIO_TH_YL', 'NGAY_TH_YL', 'ThoiGianThucHien', 'Ngày thực hiện'])),
             NGAY_KQ: parseDateString(getCol(row, ['NGAYGIO_KQ', 'NGAY_KQ', 'ThoiGianKetQua', 'Ngày kết quả'])),
-            MA_BAC_SI: String(getCol(row, ['MA_BAC_SI', 'NguoiChiDinh', 'Bác sĩ'])),
-            NGUOI_THUC_HIEN: String(getCol(row, ['NGUOI_THUC_HIEN', 'NguoiThucHien', 'Người thực hiện', 'MACCHN', 'CCHN'])),
-            MA_MAY: String(getCol(row, ['MA_MAY', 'MaMay', 'Mã máy'])),
+            MA_BAC_SI: String(getCol(row, ['MA_BAC_SI', 'NguoiChiDinh', 'Bác sĩ']) || '').trim().toUpperCase(),
+            NGUOI_THUC_HIEN: String(getCol(row, ['NGUOI_THUC_HIEN', 'NguoiThucHien', 'Người thực hiện', 'MACCHN', 'CCHN']) || '').trim().toUpperCase(),
+            MA_MAY: String(getCol(row, ['MA_MAY', 'MaMay', 'Mã máy']) || '').trim().toUpperCase(),
             LOAI_BIEU: row['MA_THUOC'] ? 'THUOC' : 'CLS',
             originalRow: row
           };
@@ -218,9 +218,9 @@ export default function App() {
       const wb = XLSX.read(bstr, { type: 'binary' });
       const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
       const catalog = data.map((r: any) => ({
-        cchn: String(getCol(r, ['MACCHN', 'CCHN', 'MaNV', 'Mã NV', 'MA_NV', 'MA_BHXH'])),
-        name: String(getCol(r, ['HO_TEN', 'TEN_NV', 'TenNV', 'Tên NV', 'HoTen', 'Họ tên']))
-      })).filter(x => x.cchn && x.cchn !== 'undefined');
+        cchn: String(getCol(r, ['MACCHN', 'CCHN', 'MaNV', 'Mã NV', 'MA_NV', 'MA_BHXH']) || '').trim().toUpperCase(),
+        name: String(getCol(r, ['HO_TEN', 'TEN_NV', 'TenNV', 'Tên NV', 'HoTen', 'Họ tên']) || '').trim()
+      })).filter(x => x.cchn && x.cchn !== 'UNDEFINED' && x.cchn !== '');
       updateConfig({ ...config, staffCatalog: catalog });
     };
     reader.readAsBinaryString(file);
@@ -236,10 +236,10 @@ export default function App() {
       const wb = XLSX.read(bstr, { type: 'binary' });
       const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
       const catalog = data.map((r: any) => ({
-        code: String(getCol(r, ['MA_MAY', 'Mã máy', 'MaMay', 'KY_HIEU'])),
-        name: String(getCol(r, ['TEN_TB', 'TEN_MAY', 'Tên máy', 'TenMay'])),
+        code: String(getCol(r, ['MA_MAY', 'Mã máy', 'MaMay', 'KY_HIEU']) || '').trim().toUpperCase(),
+        name: String(getCol(r, ['TEN_TB', 'TEN_MAY', 'Tên máy', 'TenMay']) || '').trim(),
         allowOverlap: Boolean(getCol(r, ['CHO_PHEP_TRUNG', 'ChoPhepTrung', 'AllowOverlap']))
-      })).filter(x => x.code && x.code !== 'undefined');
+      })).filter(x => x.code && x.code !== 'UNDEFINED' && x.code !== '');
       updateConfig({ ...config, machineCatalog: catalog });
     };
     reader.readAsBinaryString(file);
@@ -255,10 +255,10 @@ export default function App() {
       const wb = XLSX.read(bstr, { type: 'binary' });
       const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
       const catalog = data.map((r: any) => ({
-        code: String(getCol(r, ['MA_DICH_VU', 'MA_DVKT', 'Mã DV', 'MaDVKT', 'MA_TUONG_DUONG'])),
-        name: String(getCol(r, ['TEN_DICH_VU', 'TEN_DVKT', 'Tên DVKT', 'TEN_DVKT_PHEDUYET', 'TEN_DVKT_GIA'])),
+        code: String(getCol(r, ['MA_DICH_VU', 'MA_DVKT', 'Mã DV', 'MaDVKT', 'MA_TUONG_DUONG']) || '').trim().toUpperCase(),
+        name: String(getCol(r, ['TEN_DICH_VU', 'TEN_DVKT', 'Tên DVKT', 'TEN_DVKT_PHEDUYET', 'TEN_DVKT_GIA']) || '').trim(),
         allowStaffOverlap: Boolean(getCol(r, ['CHO_PHEP_NV_TRUNG', 'ChoPhepTrung', 'AllowStaffOverlap']))
-      })).filter(x => x.code && x.code !== 'undefined');
+      })).filter(x => x.code && x.code !== 'UNDEFINED' && x.code !== '');
       updateConfig({ ...config, serviceCatalog: catalog });
     };
     reader.readAsBinaryString(file);
