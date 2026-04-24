@@ -218,7 +218,7 @@ export default function App() {
       const wb = XLSX.read(bstr, { type: 'binary' });
       const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
       const catalog = data.map((r: any) => ({
-        cchn: String(getCol(r, ['MACCHN', 'CCHN', 'MaNV', 'Mã NV', 'MA_NV'])),
+        cchn: String(getCol(r, ['MACCHN', 'CCHN', 'MaNV', 'Mã NV', 'MA_NV', 'MA_BHXH'])),
         name: String(getCol(r, ['HO_TEN', 'TEN_NV', 'TenNV', 'Tên NV', 'HoTen', 'Họ tên']))
       })).filter(x => x.cchn && x.cchn !== 'undefined');
       updateConfig({ ...config, staffCatalog: catalog });
@@ -236,7 +236,7 @@ export default function App() {
       const wb = XLSX.read(bstr, { type: 'binary' });
       const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
       const catalog = data.map((r: any) => ({
-        code: String(getCol(r, ['MA_MAY', 'Mã máy', 'MaMay'])),
+        code: String(getCol(r, ['MA_MAY', 'Mã máy', 'MaMay', 'KY_HIEU'])),
         name: String(getCol(r, ['TEN_TB', 'TEN_MAY', 'Tên máy', 'TenMay'])),
         allowOverlap: Boolean(getCol(r, ['CHO_PHEP_TRUNG', 'ChoPhepTrung', 'AllowOverlap']))
       })).filter(x => x.code && x.code !== 'undefined');
@@ -255,8 +255,8 @@ export default function App() {
       const wb = XLSX.read(bstr, { type: 'binary' });
       const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
       const catalog = data.map((r: any) => ({
-        code: String(getCol(r, ['MA_DICH_VU', 'MA_DVKT', 'Mã DV', 'MaDVKT'])),
-        name: String(getCol(r, ['TEN_DICH_VU', 'TEN_DVKT', 'Tên DVKT'])),
+        code: String(getCol(r, ['MA_DICH_VU', 'MA_DVKT', 'Mã DV', 'MaDVKT', 'MA_TUONG_DUONG'])),
+        name: String(getCol(r, ['TEN_DICH_VU', 'TEN_DVKT', 'Tên DVKT', 'TEN_DVKT_PHEDUYET', 'TEN_DVKT_GIA'])),
         allowStaffOverlap: Boolean(getCol(r, ['CHO_PHEP_NV_TRUNG', 'ChoPhepTrung', 'AllowStaffOverlap']))
       })).filter(x => x.code && x.code !== 'undefined');
       updateConfig({ ...config, serviceCatalog: catalog });
