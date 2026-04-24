@@ -1,0 +1,6 @@
+{
+  "name": "HIS Data Validator",
+  "description": "Hệ thống kiểm tra và soát lỗi dữ liệu DVKT từ file Excel HIS (BHYT)",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
