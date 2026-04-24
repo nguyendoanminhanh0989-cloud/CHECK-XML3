@@ -1,29 +1,44 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { 
-  UploadCloud, 
-  FileSpreadsheet, 
-  AlertTriangle, 
-  CheckCircle2, 
-  Download, 
-  Trash2, 
-  Settings2,
-  Search,
-  Filter,
-  ShieldCheck,
-  Database,
-  Users,
-  Activity,
-  Server,
-  Play
+  UploadCloud, FileSpreadsheet, AlertTriangle, CheckCircle2, Download, Trash2, Settings2,
+  Search, Filter, ShieldCheck, Database, Users, Activity, Server, Play, Lock, LogOut, Loader2, Cloud
 } from 'lucide-react';
 import { DVKTRecord, ErrorLog, ValidationConfig, Staff, Machine, ServiceCatalog } from './types';
 import { validateRecords } from './validator';
 import { cn, formatDate } from './lib/utils';
+import { supabase } from './lib/supabase';
+
+const defaultConfig: ValidationConfig = {
+  checkExactTimeYL: true,
+  checkExactTimeTH: true,
+  checkExactTimeKQ: true,
+  checkStaffOverlap: true,
+  checkPatientOverlap: true,
+  checkMachine: true,
+  checkOperatingHours: true,
+  checkTimeLogic: true,
+  operatingHours: {
+    morningStart: '07:00',
+    morningEnd: '11:30',
+    afternoonStart: '13:00',
+    afternoonEnd: '17:00'
+  },
+  staffCatalog: [],
+  machineCatalog: [],
+  serviceCatalog: []
+};
 
 export default function App() {
+  // Auth State
+  const [clinicCode, setClinicCode] = useState<string | null>(null);
+  const [authStatus, setAuthStatus] = useState<'loading' | 'auth' | 'unauth'>('loading');
+  const [inputCode, setInputCode] = useState('');
+  const [authMessage, setAuthMessage] = useState('');
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  // App State
   const [activeTab, setActiveTab] = useState<'main' | 'staff' | 'service' | 'machine'>('main');
-  
   const [records, setRecords] = useState<DVKTRecord[]>([]);
   const [errors, setErrors] = useState<ErrorLog[]>([]);
   const [isValidating, setIsValidating] = useState(false);
@@ -35,26 +50,6 @@ export default function App() {
   const machineInputRef = useRef<HTMLInputElement>(null);
   const serviceInputRef = useRef<HTMLInputElement>(null);
 
-  const defaultConfig: ValidationConfig = {
-    checkExactTimeYL: true,
-    checkExactTimeTH: true,
-    checkExactTimeKQ: true,
-    checkStaffOverlap: true,
-    checkPatientOverlap: true,
-    checkMachine: true,
-    checkOperatingHours: true,
-    checkTimeLogic: true,
-    operatingHours: {
-      morningStart: '07:00',
-      morningEnd: '11:30',
-      afternoonStart: '13:00',
-      afternoonEnd: '17:00'
-    },
-    staffCatalog: [],
-    machineCatalog: [],
-    serviceCatalog: []
-  };
-
   const [config, setConfig] = useState<ValidationConfig>(() => {
     try {
       const saved = localStorage.getItem('check_xml_config_v3');
@@ -63,10 +58,87 @@ export default function App() {
     return defaultConfig;
   });
 
+  // INITIAL LOAD
   useEffect(() => {
-    localStorage.setItem('check_xml_config_v3', JSON.stringify(config));
-  }, [config]);
+    const code = localStorage.getItem('clinic_code');
+    if (code) {
+      checkClinicAuth(code);
+    } else {
+      setAuthStatus('unauth');
+    }
+  }, []);
 
+  const checkClinicAuth = async (code: string) => {
+    setAuthStatus('loading');
+    setAuthMessage('');
+    try {
+      if (code === 'GUEST') {
+        setClinicCode('GUEST');
+        setAuthStatus('auth');
+        return;
+      }
+      
+      const { data, error } = await supabase.from('clinics').select('status, config').eq('id', code).single();
+      
+      if (error && error.code === 'PGRST116') {
+        // Not found => Register
+        const { error: insertErr } = await supabase.from('clinics').insert([{ id: code, status: 'pending', config: defaultConfig }]);
+        if (insertErr) {
+          // If error is about table not existing, we provide a helpful message
+          setAuthMessage('Tính năng Đám mây đang bảo trì (Chưa có bảng Clinics trên Supabase). Vui lòng dùng tính năng Khách.');
+          setAuthStatus('unauth');
+          return;
+        }
+        setAuthMessage(`Mã [${code}] đã gửi Yêu Cầu Đăng Ký. Hãy liên hệ Email nguyendoanminhanh0989@gmail.com để được phê duyệt!`);
+        setAuthStatus('unauth');
+      } else if (data?.status === 'pending') {
+        setAuthMessage(`Mã [${code}] vẫn đang chờ phê duyệt. Vui lòng liên hệ Admin (nguyendoanminhanh0989@gmail.com)`);
+        setAuthStatus('unauth');
+      } else if (data?.status === 'approved') {
+        setClinicCode(code);
+        localStorage.setItem('clinic_code', code);
+        if (data.config) {
+           setConfig(data.config);
+           localStorage.setItem('check_xml_config_v3', JSON.stringify(data.config));
+        }
+        setAuthStatus('auth');
+      }
+    } catch (err: any) {
+      console.error(err);
+      setAuthMessage('Lỗi kết nối máy chủ Supabase. Vui lòng thử lại.');
+      setAuthStatus('unauth');
+    }
+  };
+
+  const handleLogin = () => {
+    if (!inputCode.trim()) return;
+    checkClinicAuth(inputCode.trim().toUpperCase());
+  };
+
+  const handleGuest = () => {
+    setClinicCode('GUEST');
+    localStorage.setItem('clinic_code', 'GUEST');
+    setAuthStatus('auth');
+  };
+
+  const handleLogout = () => {
+    setClinicCode(null);
+    localStorage.removeItem('clinic_code');
+    setAuthStatus('unauth');
+  };
+
+  // SYNC CONFIG TO CLOUD
+  const updateConfig = async (newConfig: ValidationConfig) => {
+    setConfig(newConfig);
+    localStorage.setItem('check_xml_config_v3', JSON.stringify(newConfig));
+    if (clinicCode && clinicCode !== 'GUEST') {
+      setIsSyncing(true);
+      await supabase.from('clinics').update({ config: newConfig }).eq('id', clinicCode);
+      setTimeout(() => setIsSyncing(false), 500); // UI feedback
+    }
+  };
+
+  // PARSERS
   const parseDateString = (val: any): Date | null => {
     if (!val) return null;
     if (val instanceof Date) return val;
@@ -149,7 +221,7 @@ export default function App() {
         cchn: String(getCol(r, ['MACCHN', 'CCHN', 'MaNV', 'Mã NV', 'MA_NV'])),
         name: String(getCol(r, ['HO_TEN', 'TEN_NV', 'TenNV', 'Tên NV', 'HoTen', 'Họ tên']))
       })).filter(x => x.cchn && x.cchn !== 'undefined');
-      setConfig(prev => ({ ...prev, staffCatalog: catalog }));
+      updateConfig({ ...config, staffCatalog: catalog });
     };
     reader.readAsBinaryString(file);
     if (staffInputRef.current) staffInputRef.current.value = '';
@@ -168,7 +240,7 @@ export default function App() {
         name: String(getCol(r, ['TEN_TB', 'TEN_MAY', 'Tên máy', 'TenMay'])),
         allowOverlap: Boolean(getCol(r, ['CHO_PHEP_TRUNG', 'ChoPhepTrung', 'AllowOverlap']))
       })).filter(x => x.code && x.code !== 'undefined');
-      setConfig(prev => ({ ...prev, machineCatalog: catalog }));
+      updateConfig({ ...config, machineCatalog: catalog });
     };
     reader.readAsBinaryString(file);
     if (machineInputRef.current) machineInputRef.current.value = '';
@@ -187,7 +259,7 @@ export default function App() {
         name: String(getCol(r, ['TEN_DICH_VU', 'TEN_DVKT', 'Tên DVKT'])),
         allowStaffOverlap: Boolean(getCol(r, ['CHO_PHEP_NV_TRUNG', 'ChoPhepTrung', 'AllowStaffOverlap']))
       })).filter(x => x.code && x.code !== 'undefined');
-      setConfig(prev => ({ ...prev, serviceCatalog: catalog }));
+      updateConfig({ ...config, serviceCatalog: catalog });
     };
     reader.readAsBinaryString(file);
     if (serviceInputRef.current) serviceInputRef.current.value = '';
@@ -259,19 +331,90 @@ export default function App() {
     </button>
   );
 
+  // AUTH SCREEN
+  if (authStatus === 'loading') {
+    return (
+      <div className="min-h-screen bg-[#f1f6f4] flex flex-col items-center justify-center">
+        <Loader2 className="animate-spin text-emerald-500 mb-4" size={48} />
+        <h2 className="text-xl font-bold text-slate-700">Đang kết nối Máy chủ Đám mây...</h2>
+      </div>
+    );
+  }
+
+  if (authStatus === 'unauth') {
+    return (
+      <div className="min-h-screen bg-[#f1f6f4] flex items-center justify-center p-4">
+        <div className="bg-white max-w-md w-full p-8 rounded-3xl shadow-xl border border-emerald-100/50">
+          <div className="flex flex-col items-center mb-8">
+            <div className="bg-gradient-to-br from-emerald-400 to-green-600 p-4 rounded-2xl shadow-lg text-white mb-4">
+              <ShieldCheck size={40} />
+            </div>
+            <h1 className="text-2xl font-black text-slate-800 tracking-tight">CHECK-XML3-ANHIT</h1>
+            <p className="text-sm font-medium text-slate-500 mt-2 text-center">Hệ thống Đối chiếu Dữ liệu Đám Mây</p>
+          </div>
+
+          {authMessage && (
+            <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm font-medium text-amber-800 text-center flex flex-col gap-2">
+              <AlertTriangle className="mx-auto text-amber-500" size={24} />
+              {authMessage}
+            </div>
+          )}
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Mã Đăng Ký Phòng Khám</label>
+              <div className="relative">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <input 
+                  type="text" 
+                  value={inputCode}
+                  onChange={(e) => setInputCode(e.target.value.toUpperCase())}
+                  placeholder="VD: 48225, 49917..."
+                  className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-mono font-bold tracking-wider focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                />
+              </div>
+            </div>
+
+            <button 
+              onClick={handleLogin}
+              className="w-full py-3 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-xl font-bold shadow-lg shadow-emerald-500/30 transition-all flex items-center justify-center gap-2"
+            >
+              <Cloud size={18} /> Đăng Nhập / Đăng Ký Cloud
+            </button>
+            
+            <div className="relative py-4 flex items-center">
+              <div className="flex-grow border-t border-slate-200"></div>
+              <span className="flex-shrink-0 mx-4 text-slate-400 text-xs font-medium uppercase tracking-wider">Hoặc</span>
+              <div className="flex-grow border-t border-slate-200"></div>
+            </div>
+
+            <button 
+              onClick={handleGuest}
+              className="w-full py-3 bg-white hover:bg-slate-50 border-2 border-slate-200 text-slate-600 hover:text-slate-800 rounded-xl font-bold transition-all"
+            >
+              Dùng Chế độ Khách (Không có Data Danh Mục)
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // MAIN APP SCREEN
   return (
     <div className="min-h-screen bg-[#f1f6f4] text-slate-800 font-sans selection:bg-emerald-200 selection:text-emerald-900 pb-12">
-      
-      {/* HEADER - MODERN GREEN */}
       <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-emerald-100 shadow-sm px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="bg-gradient-to-br from-emerald-400 to-green-600 p-2 rounded-xl shadow-md text-white">
+          <div className="bg-gradient-to-br from-emerald-400 to-green-600 p-2 rounded-xl shadow-md text-white relative">
             <ShieldCheck size={24} />
+            {isSyncing && <span className="absolute -top-1 -right-1 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span></span>}
           </div>
           <div className="flex flex-col">
             <h1 className="text-xl font-bold tracking-tight text-slate-800 leading-none">CHECK-XML3-ANHIT</h1>
-            <p className="text-[11px] font-bold text-emerald-600 tracking-wider mt-1 uppercase">
+            <p className="text-[11px] font-bold text-emerald-600 tracking-wider mt-1 uppercase flex items-center gap-1.5">
               NGUYỄN ĐOÀN MINH ÁNH - IT Y TẾ - ĐÀ NẴNG
+              {clinicCode !== 'GUEST' && <span className="bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded flex items-center gap-1"><Cloud size={10} /> ĐÃ KẾT NỐI: {clinicCode}</span>}
+              {clinicCode === 'GUEST' && <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200">CHẾ ĐỘ KHÁCH</span>}
             </p>
           </div>
         </div>
@@ -313,12 +456,18 @@ export default function App() {
           >
             <Trash2 size={18} />
           </button>
+
+          <button 
+            onClick={handleLogout}
+            className="flex items-center justify-center p-2.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800 rounded-xl transition-colors ml-2"
+            title="Đăng Xuất Khỏi Tài Khoản Phòng Khám"
+          >
+            <LogOut size={18} />
+          </button>
         </div>
       </header>
 
       <main className="p-6 max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 mt-2">
-        
-        {/* SIDEBAR */}
         <div className="lg:col-span-3 space-y-6">
           <div className="space-y-2 bg-white p-3 rounded-2xl shadow-sm border border-emerald-100/50">
             <NavButton id="main" icon={Database} label="Dữ Liệu & Đối Chiếu" />
@@ -353,25 +502,25 @@ export default function App() {
                 
                 {showConfig && (
                   <div className="mb-4 p-4 bg-emerald-50/50 border border-emerald-100 rounded-xl space-y-3 shadow-inner">
-                    <h4 className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Giờ Hành Chính</h4>
+                    <h4 className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Cài Đặt Giờ Hành Chính (Lưu Trên Cloud)</h4>
                     <div className="flex gap-3">
                       <div className="w-full space-y-1">
                         <label className="text-[10px] text-emerald-600 font-bold uppercase">Sáng Bắt Đầu</label>
-                        <input type="time" className="text-xs p-2 border border-emerald-200 rounded-lg w-full font-mono focus:ring-2 focus:ring-emerald-400 outline-none" value={config.operatingHours.morningStart} onChange={e => setConfig({...config, operatingHours: {...config.operatingHours, morningStart: e.target.value}})} />
+                        <input type="time" className="text-xs p-2 border border-emerald-200 rounded-lg w-full font-mono focus:ring-2 focus:ring-emerald-400 outline-none" value={config.operatingHours.morningStart} onChange={e => updateConfig({...config, operatingHours: {...config.operatingHours, morningStart: e.target.value}})} />
                       </div>
                       <div className="w-full space-y-1">
                         <label className="text-[10px] text-emerald-600 font-bold uppercase">Sáng Kết Thúc</label>
-                        <input type="time" className="text-xs p-2 border border-emerald-200 rounded-lg w-full font-mono focus:ring-2 focus:ring-emerald-400 outline-none" value={config.operatingHours.morningEnd} onChange={e => setConfig({...config, operatingHours: {...config.operatingHours, morningEnd: e.target.value}})} />
+                        <input type="time" className="text-xs p-2 border border-emerald-200 rounded-lg w-full font-mono focus:ring-2 focus:ring-emerald-400 outline-none" value={config.operatingHours.morningEnd} onChange={e => updateConfig({...config, operatingHours: {...config.operatingHours, morningEnd: e.target.value}})} />
                       </div>
                     </div>
                     <div className="flex gap-3">
                       <div className="w-full space-y-1">
                         <label className="text-[10px] text-emerald-600 font-bold uppercase">Chiều Bắt Đầu</label>
-                        <input type="time" className="text-xs p-2 border border-emerald-200 rounded-lg w-full font-mono focus:ring-2 focus:ring-emerald-400 outline-none" value={config.operatingHours.afternoonStart} onChange={e => setConfig({...config, operatingHours: {...config.operatingHours, afternoonStart: e.target.value}})} />
+                        <input type="time" className="text-xs p-2 border border-emerald-200 rounded-lg w-full font-mono focus:ring-2 focus:ring-emerald-400 outline-none" value={config.operatingHours.afternoonStart} onChange={e => updateConfig({...config, operatingHours: {...config.operatingHours, afternoonStart: e.target.value}})} />
                       </div>
                       <div className="w-full space-y-1">
                         <label className="text-[10px] text-emerald-600 font-bold uppercase">Chiều Kết Thúc</label>
-                        <input type="time" className="text-xs p-2 border border-emerald-200 rounded-lg w-full font-mono focus:ring-2 focus:ring-emerald-400 outline-none" value={config.operatingHours.afternoonEnd} onChange={e => setConfig({...config, operatingHours: {...config.operatingHours, afternoonEnd: e.target.value}})} />
+                        <input type="time" className="text-xs p-2 border border-emerald-200 rounded-lg w-full font-mono focus:ring-2 focus:ring-emerald-400 outline-none" value={config.operatingHours.afternoonEnd} onChange={e => updateConfig({...config, operatingHours: {...config.operatingHours, afternoonEnd: e.target.value}})} />
                       </div>
                     </div>
                   </div>
@@ -393,7 +542,7 @@ export default function App() {
                         <input 
                           type="checkbox" 
                           checked={config[item.key as keyof ValidationConfig] as boolean}
-                          onChange={(e) => setConfig({ ...config, [item.key]: e.target.checked })}
+                          onChange={(e) => updateConfig({ ...config, [item.key]: e.target.checked })}
                           className="peer sr-only"
                         />
                         <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-emerald-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
@@ -407,10 +556,8 @@ export default function App() {
           )}
         </div>
 
-        {/* MAIN CONTENT AREA */}
         <div className="lg:col-span-9">
           
-          {/* TAB MAIN */}
           {activeTab === 'main' && (
             <div className="flex flex-col gap-4">
               <div className="bg-white border border-emerald-100 rounded-2xl p-3 shadow-sm flex items-center gap-3">
@@ -517,19 +664,19 @@ export default function App() {
             </div>
           )}
 
-          {/* TAB STAFF */}
           {activeTab === 'staff' && (
             <div className="bg-white border border-emerald-100 rounded-2xl shadow-sm p-8 h-full flex flex-col">
               <div className="flex justify-between items-center mb-8 border-b border-slate-100 pb-5">
                 <div>
                   <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Users className="text-emerald-500"/> Danh Mục Nhân Viên (Bảng 2)</h2>
-                  <p className="text-sm text-slate-500 mt-2 font-medium">Tải lên file danh sách nhân sự. Hệ thống tự động nhận diện cột <code className="bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded font-mono border border-emerald-100">MACCHN</code> và <code className="bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded font-mono border border-emerald-100">HO_TEN</code>.</p>
+                  <p className="text-sm text-slate-500 mt-2 font-medium">Tải lên file danh sách nhân sự. Sẽ được đồng bộ lên máy chủ Cloud theo mã phòng khám của bạn.</p>
                 </div>
                 <input type="file" ref={staffInputRef} onChange={handleImportStaff} className="hidden" accept=".xlsx, .xls" />
-                <button onClick={() => staffInputRef.current?.click()} className="px-5 py-2.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-xl text-sm transition-all shadow-sm font-bold flex items-center gap-2">
+                <button disabled={clinicCode === 'GUEST'} onClick={() => staffInputRef.current?.click()} className="px-5 py-2.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-xl text-sm transition-all shadow-sm font-bold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                   <UploadCloud size={16}/> Tải Danh Mục
                 </button>
               </div>
+              {clinicCode === 'GUEST' && <div className="bg-amber-50 p-3 rounded-lg text-amber-700 text-sm mb-4">Bạn đang dùng chế độ Khách. Tính năng tải lên Danh mục đã bị khóa.</div>}
               <div className="border border-slate-200 rounded-xl overflow-hidden flex-1 shadow-sm">
                 <div className="overflow-y-auto h-full custom-scrollbar max-h-[500px]">
                   <table className="w-full text-left text-sm">
@@ -557,20 +704,19 @@ export default function App() {
             </div>
           )}
 
-          {/* TAB SERVICE */}
           {activeTab === 'service' && (
             <div className="bg-white border border-emerald-100 rounded-2xl shadow-sm p-8 h-full flex flex-col">
               <div className="flex justify-between items-center mb-8 border-b border-slate-100 pb-5">
                 <div>
                   <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Activity className="text-emerald-500"/> Danh Mục DVKT (Bảng 5)</h2>
-                  <p className="text-sm text-slate-500 mt-2 font-medium">Bạn có thể thiết lập cho phép 1 nhân viên thực hiện dịch vụ này song song với các dịch vụ khác.</p>
+                  <p className="text-sm text-slate-500 mt-2 font-medium">Sẽ được đồng bộ lên máy chủ Cloud. Bạn có thể bật tắt Cho Phép Làm Chồng Chéo Giờ ở đây.</p>
                 </div>
                 <input type="file" ref={serviceInputRef} onChange={handleImportService} className="hidden" accept=".xlsx, .xls" />
-                <button onClick={() => serviceInputRef.current?.click()} className="px-5 py-2.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-xl text-sm transition-all shadow-sm font-bold flex items-center gap-2">
+                <button disabled={clinicCode === 'GUEST'} onClick={() => serviceInputRef.current?.click()} className="px-5 py-2.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-xl text-sm transition-all shadow-sm font-bold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                   <UploadCloud size={16}/> Tải Bảng 5
                 </button>
               </div>
-              
+              {clinicCode === 'GUEST' && <div className="bg-amber-50 p-3 rounded-lg text-amber-700 text-sm mb-4">Bạn đang dùng chế độ Khách. Tính năng tải lên Danh mục đã bị khóa.</div>}
               <div className="border border-slate-200 rounded-xl overflow-hidden flex-1 shadow-sm">
                 <div className="overflow-y-auto h-full custom-scrollbar max-h-[500px]">
                   <table className="w-full text-left text-sm">
@@ -601,16 +747,17 @@ export default function App() {
                                   <label className="relative flex items-center cursor-pointer">
                                     <input 
                                       type="checkbox" 
+                                      disabled={clinicCode === 'GUEST'}
                                       checked={s.allowStaffOverlap} 
                                       onChange={(e) => {
                                         const newCat = [...config.serviceCatalog];
                                         const itemIdx = newCat.findIndex(x => x.code === s.code);
                                         if(itemIdx > -1) {
                                           newCat[itemIdx].allowStaffOverlap = e.target.checked;
-                                          setConfig({...config, serviceCatalog: newCat});
+                                          updateConfig({...config, serviceCatalog: newCat});
                                         }
                                       }}
-                                      className="sr-only peer"
+                                      className="sr-only peer disabled:cursor-not-allowed"
                                     />
                                     <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
                                   </label>
@@ -627,19 +774,19 @@ export default function App() {
             </div>
           )}
 
-          {/* TAB MACHINE */}
           {activeTab === 'machine' && (
             <div className="bg-white border border-emerald-100 rounded-2xl shadow-sm p-8 h-full flex flex-col">
               <div className="flex justify-between items-center mb-8 border-b border-slate-100 pb-5">
                 <div>
                   <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Server className="text-emerald-500"/> Danh Mục Thiết Bị (Bảng 6)</h2>
-                  <p className="text-sm text-slate-500 mt-2 font-medium">Bật cấu hình này nếu Thiết bị đó (ví dụ máy X-Quang) cho phép nhiều bệnh nhân sử dụng cùng 1 lúc.</p>
+                  <p className="text-sm text-slate-500 mt-2 font-medium">Bật cấu hình này nếu Thiết bị đó cho phép nhiều bệnh nhân sử dụng cùng lúc.</p>
                 </div>
                 <input type="file" ref={machineInputRef} onChange={handleImportMachine} className="hidden" accept=".xlsx, .xls" />
-                <button onClick={() => machineInputRef.current?.click()} className="px-5 py-2.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-xl text-sm transition-all shadow-sm font-bold flex items-center gap-2">
+                <button disabled={clinicCode === 'GUEST'} onClick={() => machineInputRef.current?.click()} className="px-5 py-2.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-xl text-sm transition-all shadow-sm font-bold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                   <UploadCloud size={16}/> Tải Bảng 6
                 </button>
               </div>
+              {clinicCode === 'GUEST' && <div className="bg-amber-50 p-3 rounded-lg text-amber-700 text-sm mb-4">Bạn đang dùng chế độ Khách. Tính năng tải lên Danh mục đã bị khóa.</div>}
               <div className="border border-slate-200 rounded-xl overflow-hidden flex-1 shadow-sm">
                 <div className="overflow-y-auto h-full custom-scrollbar max-h-[500px]">
                   <table className="w-full text-left text-sm">
@@ -662,13 +809,14 @@ export default function App() {
                               <label className="relative flex items-center cursor-pointer">
                                 <input 
                                   type="checkbox" 
+                                  disabled={clinicCode === 'GUEST'}
                                   checked={m.allowOverlap} 
                                   onChange={(e) => {
                                     const newCat = [...config.machineCatalog];
                                     newCat[i].allowOverlap = e.target.checked;
-                                    setConfig({...config, machineCatalog: newCat});
+                                    updateConfig({...config, machineCatalog: newCat});
                                   }}
-                                  className="sr-only peer"
+                                  className="sr-only peer disabled:cursor-not-allowed"
                                 />
                                 <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
                               </label>
