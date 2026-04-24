@@ -275,27 +275,47 @@ export default function App() {
 
   const handleExport = () => {
     const wb = XLSX.utils.book_new();
-    const dataWithStatus = records.map(rec => {
-      const recErrors = errors.filter(e => e.recordId === rec.id);
-      return {
-        'MA_LK': rec.MA_LK,
-        'TEN_DVKT': rec.TEN_DICH_VU,
-        'THOI_GIAN_YL': rec.NGAY_YL ? formatDate(rec.NGAY_YL) : '',
-        'THOI_GIAN_TH': rec.NGAY_TH_YL ? formatDate(rec.NGAY_TH_YL) : '',
-        'THOI_GIAN_KQ': rec.NGAY_KQ ? formatDate(rec.NGAY_KQ) : '',
-        'TEN_NGUOI_YL': rec.MA_BAC_SI,
-        'TEN_NGUOI_TH': rec.NGUOI_THUC_HIEN,
-        'MA_MAY': rec.MA_MAY,
-        'GHI_CHU': recErrors.map(e => e.NoiDung).join('; '),
-        ...rec.originalRow
-      };
-    });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dataWithStatus), "Kết quả Đối Chiếu");
-    const wsErrors = XLSX.utils.json_to_sheet(errors.map(e => ({
-      'Mã LK': e.MA_LK, 'Mã DV': e.MA_DICH_VU, 'Nội dung lỗi': e.NoiDung, 'Loại': e.Loai === 'heavy' ? 'Lỗi nặng' : 'Cảnh báo'
-    })));
-    XLSX.utils.book_append_sheet(wb, wsErrors, "Chi Tiết Lỗi");
-    XLSX.writeFile(wb, `Ket_Qua_Kiem_Tra_${new Date().getTime()}.xlsx`);
+
+    const buildSheetData = (filterFn: (e: ErrorLog) => boolean) => {
+      const filteredErrors = errors.filter(filterFn);
+      return filteredErrors.map(e => {
+        const rec = records.find(r => r.id === e.recordId);
+        return {
+          'Mã LK': e.MA_LK,
+          'Mã DV': e.MA_DICH_VU,
+          'Tên Dịch Vụ': rec?.TEN_DICH_VU || '',
+          'Thời Gian Y Lệnh': rec?.NGAY_YL ? formatDate(rec.NGAY_YL) : '',
+          'Thời Gian Thực Hiện': rec?.NGAY_TH_YL ? formatDate(rec.NGAY_TH_YL) : '',
+          'Thời Gian Kết Quả': rec?.NGAY_KQ ? formatDate(rec.NGAY_KQ) : '',
+          'Người Y Lệnh': rec?.MA_BAC_SI || '',
+          'Người Thực Hiện': rec?.NGUOI_THUC_HIEN || '',
+          'Mã Máy': rec?.MA_MAY || '',
+          'Nội Dung Lỗi': e.NoiDung,
+          'Mức Độ': e.Loai === 'heavy' ? 'Lỗi nặng' : 'Cảnh báo'
+        };
+      });
+    };
+
+    // Sheet 1: Tổng hợp full lỗi
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildSheetData(() => true)), "1. Tổng Hợp Lỗi");
+
+    // Sheet 2: Trùng mã máy
+    const errMay = buildSheetData(e => e.NoiDung.toLowerCase().includes('máy'));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(errMay), "2. Lỗi Trùng Mã Máy");
+
+    // Sheet 3: Trùng y lệnh
+    const errYL = buildSheetData(e => e.NoiDung.toLowerCase().includes('y lệnh'));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(errYL), "3. Lỗi Trùng Y Lệnh");
+
+    // Sheet 4: Trùng thực hiện
+    const errTH = buildSheetData(e => e.NoiDung.toLowerCase().includes('thực hiện') || e.NoiDung.toLowerCase().includes('chồng chéo'));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(errTH), "4. Lỗi Trùng Thực Hiện");
+
+    // Sheet 5: Trùng kết quả
+    const errKQ = buildSheetData(e => e.NoiDung.toLowerCase().includes('kết quả'));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(errKQ), "5. Lỗi Trùng Kết Quả");
+
+    XLSX.writeFile(wb, `Bao_Cao_Doi_Chieu_${new Date().getTime()}.xlsx`);
   };
 
   const filteredRecords = useMemo(() => {
