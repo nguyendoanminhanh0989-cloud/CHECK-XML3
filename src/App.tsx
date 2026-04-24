@@ -379,12 +379,12 @@ export default function App() {
 
                 <div className="bg-white border border-emerald-100/80 rounded-2xl shadow-sm p-3 space-y-1">
                   {[
-                    { key: 'checkExactTimeYL', label: 'Bác sĩ: Y Lệnh bằng nhau' },
-                    { key: 'checkExactTimeTH', label: 'Nhân viên: Giờ TH bằng nhau' },
-                    { key: 'checkExactTimeKQ', label: 'Nhân viên: Giờ KQ bằng nhau' },
+                    { key: 'checkExactTimeYL', label: 'Bác sĩ: Trùng khớp giờ Y Lệnh (100%)' },
+                    { key: 'checkExactTimeTH', label: 'Nhân viên: Trùng khớp giờ TH (100%)' },
+                    { key: 'checkExactTimeKQ', label: 'Nhân viên: Trùng khớp giờ KQ (100%)' },
                     { key: 'checkStaffOverlap', label: 'Nhân viên: Chồng chéo ca làm' },
-                    { key: 'checkPatientOverlap', label: 'Bệnh nhân: Cùng lúc (Trừ XN)' },
-                    { key: 'checkMachine', label: 'Máy móc: Giới hạn đồng thời' },
+                    { key: 'checkPatientOverlap', label: 'Bệnh nhân: Chồng chéo thời gian (Trừ XN)' },
+                    { key: 'checkMachine', label: 'Máy móc: Chồng chéo thiết bị' },
                     { key: 'checkTimeLogic', label: 'Logic: Y Lệnh ≤ TH ≤ KQ' },
                     { key: 'checkOperatingHours', label: 'Giờ HC: Cảnh báo làm ngoài giờ' }
                   ].map((item) => (
@@ -578,7 +578,7 @@ export default function App() {
                       <tr>
                         <th className="px-6 py-4 font-bold text-slate-500 text-xs w-48 uppercase tracking-wider">Mã Dịch Vụ</th>
                         <th className="px-6 py-4 font-bold text-slate-500 text-xs uppercase tracking-wider">Tên Dịch Vụ</th>
-                        <th className="px-6 py-4 font-bold text-emerald-600 text-xs text-center w-64 uppercase tracking-wider bg-emerald-50/50">Cho Phép NV Làm Trùng Giờ</th>
+                        <th className="px-6 py-4 font-bold text-emerald-600 text-xs text-center w-64 uppercase tracking-wider bg-emerald-50/50">Cho Phép NV Làm Chồng Chéo Giờ</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -647,7 +647,7 @@ export default function App() {
                       <tr>
                         <th className="px-6 py-4 font-bold text-slate-500 text-xs w-48 uppercase tracking-wider">Mã Thiết Bị</th>
                         <th className="px-6 py-4 font-bold text-slate-500 text-xs uppercase tracking-wider">Tên Thiết Bị / Máy Móc</th>
-                        <th className="px-6 py-4 font-bold text-emerald-600 text-xs text-center w-64 uppercase tracking-wider bg-emerald-50/50">Cho Phép Nhiều BN Trùng Giờ</th>
+                        <th className="px-6 py-4 font-bold text-emerald-600 text-xs text-center w-64 uppercase tracking-wider bg-emerald-50/50">Cho Phép Nhiều BN Chồng Chéo Giờ</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
