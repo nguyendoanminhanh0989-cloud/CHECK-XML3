@@ -1,20 +1,21 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { 
-  FileUp, 
+  UploadCloud, 
   FileSpreadsheet, 
-  AlertCircle, 
+  AlertTriangle, 
   CheckCircle2, 
   Download, 
   Trash2, 
   Settings2,
   Search,
   Filter,
-  MonitorCheck,
+  ShieldCheck,
   Database,
   Users,
   Activity,
-  Server
+  Server,
+  Play
 } from 'lucide-react';
 import { DVKTRecord, ErrorLog, ValidationConfig, Staff, Machine, ServiceCatalog } from './types';
 import { validateRecords } from './validator';
@@ -34,7 +35,7 @@ export default function App() {
   const machineInputRef = useRef<HTMLInputElement>(null);
   const serviceInputRef = useRef<HTMLInputElement>(null);
 
-  const [config, setConfig] = useState<ValidationConfig>({
+  const defaultConfig: ValidationConfig = {
     checkExactTimeYL: true,
     checkExactTimeTH: true,
     checkExactTimeKQ: true,
@@ -52,7 +53,19 @@ export default function App() {
     staffCatalog: [],
     machineCatalog: [],
     serviceCatalog: []
+  };
+
+  const [config, setConfig] = useState<ValidationConfig>(() => {
+    try {
+      const saved = localStorage.getItem('check_xml_config_v3');
+      if (saved) return JSON.parse(saved);
+    } catch (e) { console.error(e); }
+    return defaultConfig;
   });
+
+  useEffect(() => {
+    localStorage.setItem('check_xml_config_v3', JSON.stringify(config));
+  }, [config]);
 
   const parseDateString = (val: any): Date | null => {
     if (!val) return null;
@@ -121,7 +134,6 @@ export default function App() {
       };
       reader.readAsBinaryString(file);
     });
-    
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -132,14 +144,12 @@ export default function App() {
     reader.onload = (evt) => {
       const bstr = evt.target?.result;
       const wb = XLSX.read(bstr, { type: 'binary' });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const data = XLSX.utils.sheet_to_json(ws);
+      const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
       const catalog = data.map((r: any) => ({
         cchn: String(getCol(r, ['MACCHN', 'CCHN', 'MaNV', 'Mã NV', 'MA_NV'])),
         name: String(getCol(r, ['HO_TEN', 'TEN_NV', 'TenNV', 'Tên NV', 'HoTen', 'Họ tên']))
       })).filter(x => x.cchn && x.cchn !== 'undefined');
       setConfig(prev => ({ ...prev, staffCatalog: catalog }));
-      alert(`Đã import ${catalog.length} nhân viên.`);
     };
     reader.readAsBinaryString(file);
     if (staffInputRef.current) staffInputRef.current.value = '';
@@ -152,15 +162,13 @@ export default function App() {
     reader.onload = (evt) => {
       const bstr = evt.target?.result;
       const wb = XLSX.read(bstr, { type: 'binary' });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const data = XLSX.utils.sheet_to_json(ws);
+      const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
       const catalog = data.map((r: any) => ({
         code: String(getCol(r, ['MA_MAY', 'Mã máy', 'MaMay'])),
         name: String(getCol(r, ['TEN_TB', 'TEN_MAY', 'Tên máy', 'TenMay'])),
         allowOverlap: Boolean(getCol(r, ['CHO_PHEP_TRUNG', 'ChoPhepTrung', 'AllowOverlap']))
       })).filter(x => x.code && x.code !== 'undefined');
       setConfig(prev => ({ ...prev, machineCatalog: catalog }));
-      alert(`Đã import ${catalog.length} máy/thiết bị.`);
     };
     reader.readAsBinaryString(file);
     if (machineInputRef.current) machineInputRef.current.value = '';
@@ -173,15 +181,13 @@ export default function App() {
     reader.onload = (evt) => {
       const bstr = evt.target?.result;
       const wb = XLSX.read(bstr, { type: 'binary' });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const data = XLSX.utils.sheet_to_json(ws);
+      const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
       const catalog = data.map((r: any) => ({
         code: String(getCol(r, ['MA_DICH_VU', 'MA_DVKT', 'Mã DV', 'MaDVKT'])),
         name: String(getCol(r, ['TEN_DICH_VU', 'TEN_DVKT', 'Tên DVKT'])),
         allowStaffOverlap: Boolean(getCol(r, ['CHO_PHEP_NV_TRUNG', 'ChoPhepTrung', 'AllowStaffOverlap']))
       })).filter(x => x.code && x.code !== 'undefined');
       setConfig(prev => ({ ...prev, serviceCatalog: catalog }));
-      alert(`Đã import ${catalog.length} dịch vụ kỹ thuật.`);
     };
     reader.readAsBinaryString(file);
     if (serviceInputRef.current) serviceInputRef.current.value = '';
@@ -190,15 +196,13 @@ export default function App() {
   const handleValidate = () => {
     setIsValidating(true);
     setTimeout(() => {
-      const results = validateRecords(records, config);
-      setErrors(results);
+      setErrors(validateRecords(records, config));
       setIsValidating(false);
-    }, 600);
+    }, 400);
   };
 
   const handleExport = () => {
     const wb = XLSX.utils.book_new();
-
     const dataWithStatus = records.map(rec => {
       const recErrors = errors.filter(e => e.recordId === rec.id);
       return {
@@ -214,27 +218,19 @@ export default function App() {
         ...rec.originalRow
       };
     });
-    const wsAll = XLSX.utils.json_to_sheet(dataWithStatus);
-    XLSX.utils.book_append_sheet(wb, wsAll, "Kết quả Đối chiếu");
-
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dataWithStatus), "Kết quả Đối Chiếu");
     const wsErrors = XLSX.utils.json_to_sheet(errors.map(e => ({
-      'Mã LK': e.MA_LK,
-      'Mã DV': e.MA_DICH_VU,
-      'Nội dung lỗi': e.NoiDung,
-      'Loại': e.Loai === 'heavy' ? 'Nặng' : 'Cảnh báo'
+      'Mã LK': e.MA_LK, 'Mã DV': e.MA_DICH_VU, 'Nội dung lỗi': e.NoiDung, 'Loại': e.Loai === 'heavy' ? 'Lỗi nặng' : 'Cảnh báo'
     })));
-    XLSX.utils.book_append_sheet(wb, wsErrors, "Danh sách lỗi chi tiết");
-
-    XLSX.writeFile(wb, `Ket_Qua_Kiem_Tra_DVKT_${new Date().getTime()}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, wsErrors, "Chi Tiết Lỗi");
+    XLSX.writeFile(wb, `Ket_Qua_Kiem_Tra_${new Date().getTime()}.xlsx`);
   };
 
   const filteredRecords = useMemo(() => {
     if (!searchTerm) return records;
     const s = searchTerm.toLowerCase();
     return records.filter(r => 
-      r.MA_LK.toLowerCase().includes(s) || 
-      r.MA_DICH_VU.toLowerCase().includes(s) || 
-      r.TEN_DICH_VU.toLowerCase().includes(s)
+      r.MA_LK.toLowerCase().includes(s) || r.MA_DICH_VU.toLowerCase().includes(s) || r.TEN_DICH_VU.toLowerCase().includes(s)
     );
   }, [records, searchTerm]);
 
@@ -248,18 +244,35 @@ export default function App() {
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [config.serviceCatalog]);
 
+  const NavButton = ({ id, icon: Icon, label }: { id: any, icon: any, label: string }) => (
+    <button 
+      onClick={() => setActiveTab(id)} 
+      className={cn(
+        "flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition-all font-semibold w-full text-left shadow-sm border", 
+        activeTab === id 
+          ? "bg-gradient-to-r from-emerald-500 to-green-500 text-white border-transparent shadow-[0_4px_12px_rgba(16,185,129,0.3)]" 
+          : "bg-white text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 hover:border-emerald-200 border-slate-100"
+      )}
+    >
+      <Icon size={18} className={activeTab === id ? "text-white" : "text-emerald-600"} />
+      {label}
+    </button>
+  );
+
   return (
-    <div className="min-h-screen bg-[#e8f1f8] bg-gradient-to-br from-[#e1ecf7] via-[#f4f8fb] to-[#d6e5f3] text-[#1A1A1A] font-sans pb-10">
+    <div className="min-h-screen bg-[#f1f6f4] text-slate-800 font-sans selection:bg-emerald-200 selection:text-emerald-900 pb-12">
       
-      {/* HEADER: Theme Xanh Dương Mạnh, Nút xanh lá */}
-      <header className="sticky top-0 z-20 bg-gradient-to-r from-blue-900 to-[#1e3a8a] shadow-lg border-b border-blue-950 px-6 py-4 flex items-center justify-between text-white">
-        <div className="flex items-center gap-4">
-          <div className="bg-gradient-to-br from-emerald-400 to-emerald-600 p-2.5 rounded-xl shadow-[0_0_15px_rgba(16,185,129,0.4)] border border-emerald-300/30">
-            <MonitorCheck size={26} className="text-white" />
+      {/* HEADER - MODERN GREEN */}
+      <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-emerald-100 shadow-sm px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="bg-gradient-to-br from-emerald-400 to-green-600 p-2 rounded-xl shadow-md text-white">
+            <ShieldCheck size={24} />
           </div>
-          <div className="flex flex-col justify-center">
-            <h1 className="text-2xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-blue-100">Check_XML_3</h1>
-            <p className="text-[10px] font-bold text-emerald-400 tracking-[0.2em] uppercase mt-0.5">NGUYỄN ĐOÀN MINH ÁNH - IT Y TẾ</p>
+          <div className="flex flex-col">
+            <h1 className="text-xl font-bold tracking-tight text-slate-800 leading-none">CHECK-XML3-ANHIT</h1>
+            <p className="text-[11px] font-bold text-emerald-600 tracking-wider mt-1 uppercase">
+              NGUYỄN ĐOÀN MINH ÁNH - IT Y TẾ - ĐÀ NẴNG
+            </p>
           </div>
         </div>
 
@@ -267,205 +280,180 @@ export default function App() {
           <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept=".xlsx, .xls, .csv" multiple />
           <button 
             onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-2 px-5 py-2.5 bg-white/10 hover:bg-white/20 border border-white/20 text-white rounded-xl transition-all text-sm font-medium shadow-sm cursor-pointer backdrop-blur-sm"
+            className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-emerald-500 hover:bg-emerald-50 text-emerald-700 rounded-xl transition-all text-sm font-bold shadow-sm"
           >
-            <FileUp size={18} />
-            <span>Nhập File Đối Chiếu</span>
+            <UploadCloud size={18} />
+            <span>Tải Lên File Excel</span>
           </button>
           
           <button 
             onClick={handleValidate}
             disabled={records.length === 0 || isValidating}
-            className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white rounded-xl transition-all text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_4px_12px_rgba(16,185,129,0.3)] cursor-pointer border border-emerald-400/50"
+            className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-xl transition-all text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_4px_12px_rgba(16,185,129,0.3)]"
           >
-            {isValidating ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Search size={18} />}
+            {isValidating ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Play size={16} className="fill-current" />}
             <span>Thực Hiện Đối Chiếu</span>
           </button>
+
+          <div className="w-px h-6 bg-slate-200 mx-2"></div>
 
           <button 
             onClick={handleExport}
             disabled={records.length === 0}
-            className="flex items-center gap-2 px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed shadow-sm border border-slate-700 cursor-pointer"
+            className="flex items-center justify-center p-2.5 bg-slate-800 border border-slate-700 hover:bg-slate-700 text-white rounded-xl transition-all disabled:opacity-50 shadow-md"
+            title="Xuất File Báo Cáo"
           >
             <Download size={18} />
-            <span>Xuất Báo Cáo</span>
           </button>
 
           <button 
             onClick={() => { setRecords([]); setErrors([]); }}
-            className="p-2.5 text-blue-200 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors cursor-pointer border border-transparent"
-            title="Xóa tất cả"
+            className="flex items-center justify-center p-2.5 text-red-500 hover:bg-red-50 hover:text-red-600 rounded-xl transition-colors border border-transparent hover:border-red-100"
+            title="Xóa Tất Cả Dữ Liệu"
           >
-            <Trash2 size={20} />
+            <Trash2 size={18} />
           </button>
         </div>
       </header>
 
-      <main className="p-6 max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 mt-2">
+      <main className="p-6 max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 mt-2">
         
-        {/* Left Panel: Navigation & Stats */}
-        <div className="lg:col-span-3 space-y-5">
-          <div className="bg-white/90 backdrop-blur-md border border-blue-100/50 rounded-2xl p-4 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col gap-2 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 px-2">Menu Tính Năng</h3>
-            
-            <button 
-              onClick={() => setActiveTab('main')} 
-              className={cn("flex items-center gap-3 p-3.5 rounded-xl text-left text-sm font-semibold transition-all border", activeTab === 'main' ? "bg-emerald-50 border-emerald-200 text-emerald-700 shadow-sm" : "border-transparent hover:bg-slate-50 text-slate-600")}
-            >
-              <Database size={18} className={activeTab === 'main' ? "text-emerald-600" : "text-slate-400"} />
-              Dữ liệu & Kết quả
-            </button>
-            <button 
-              onClick={() => setActiveTab('staff')} 
-              className={cn("flex items-center gap-3 p-3.5 rounded-xl text-left text-sm font-semibold transition-all border", activeTab === 'staff' ? "bg-emerald-50 border-emerald-200 text-emerald-700 shadow-sm" : "border-transparent hover:bg-slate-50 text-slate-600")}
-            >
-              <Users size={18} className={activeTab === 'staff' ? "text-emerald-600" : "text-slate-400"} />
-              Danh mục Nhân viên (Bảng 2)
-            </button>
-            <button 
-              onClick={() => setActiveTab('service')} 
-              className={cn("flex items-center gap-3 p-3.5 rounded-xl text-left text-sm font-semibold transition-all border", activeTab === 'service' ? "bg-emerald-50 border-emerald-200 text-emerald-700 shadow-sm" : "border-transparent hover:bg-slate-50 text-slate-600")}
-            >
-              <Activity size={18} className={activeTab === 'service' ? "text-emerald-600" : "text-slate-400"} />
-              Danh mục Dịch vụ (Bảng 5)
-            </button>
-            <button 
-              onClick={() => setActiveTab('machine')} 
-              className={cn("flex items-center gap-3 p-3.5 rounded-xl text-left text-sm font-semibold transition-all border", activeTab === 'machine' ? "bg-emerald-50 border-emerald-200 text-emerald-700 shadow-sm" : "border-transparent hover:bg-slate-50 text-slate-600")}
-            >
-              <Server size={18} className={activeTab === 'machine' ? "text-emerald-600" : "text-slate-400"} />
-              Danh mục TTB/Máy (Bảng 6)
-            </button>
+        {/* SIDEBAR */}
+        <div className="lg:col-span-3 space-y-6">
+          <div className="space-y-2 bg-white p-3 rounded-2xl shadow-sm border border-emerald-100/50">
+            <NavButton id="main" icon={Database} label="Dữ Liệu & Đối Chiếu" />
+            <NavButton id="staff" icon={Users} label="Danh Mục Nhân Viên" />
+            <NavButton id="service" icon={Activity} label="Danh Mục DVKT (Bảng 5)" />
+            <NavButton id="machine" icon={Server} label="Danh Mục TTB (Bảng 6)" />
           </div>
 
           {activeTab === 'main' && (
-            <>
-              <section className="bg-white/90 backdrop-blur-md border border-blue-100/50 rounded-2xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Thống kê</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl">
-                    <p className="text-2xl font-black text-slate-700">{records.length}</p>
-                    <p className="text-xs font-semibold text-slate-500 mt-1">Bản ghi</p>
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 pl-1">Tổng Quan Dữ Liệu</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-white border-l-4 border-emerald-500 p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow">
+                    <p className="text-slate-500 text-xs font-semibold mb-1 uppercase tracking-wide">Số Bản Ghi</p>
+                    <p className="text-2xl font-black text-slate-800">{records.length}</p>
                   </div>
-                  <div className="bg-red-50/80 border border-red-100 p-4 rounded-2xl relative overflow-hidden">
-                    <div className="absolute -right-4 -bottom-4 opacity-10 text-red-500"><AlertCircle size={64}/></div>
-                    <p className="text-2xl font-black text-red-600 relative">{errors.length}</p>
-                    <p className="text-xs font-semibold text-red-500 mt-1 relative">Cảnh báo/Lỗi</p>
+                  <div className="bg-white border-l-4 border-red-500 p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow">
+                    <p className="text-slate-500 text-xs font-semibold mb-1 uppercase tracking-wide">Lỗi Phát Hiện</p>
+                    <p className={cn("text-2xl font-black", errors.length > 0 ? "text-red-600" : "text-slate-800")}>{errors.length}</p>
                   </div>
                 </div>
-              </section>
+              </div>
 
-              <section className="bg-white/90 backdrop-blur-md border border-blue-100/50 rounded-2xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
-                <div className="flex items-center justify-between mb-5">
-                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Cấu hình Đối chiếu</h3>
-                  <button onClick={() => setShowConfig(!showConfig)} className="text-emerald-600 hover:text-emerald-500 transition-colors bg-emerald-50 p-1.5 rounded-lg">
+              <div>
+                <div className="flex items-center justify-between mb-3 pl-1">
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Cấu Hình Ràng Buộc</h3>
+                  <button onClick={() => setShowConfig(!showConfig)} className="text-emerald-500 hover:text-emerald-600 bg-emerald-50 hover:bg-emerald-100 p-1.5 rounded-lg transition-colors">
                     <Settings2 size={16} />
                   </button>
                 </div>
                 
                 {showConfig && (
-                  <div className="mb-5 p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
-                    <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Giờ hành chính</h4>
+                  <div className="mb-4 p-4 bg-emerald-50/50 border border-emerald-100 rounded-xl space-y-3 shadow-inner">
+                    <h4 className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Giờ Hành Chính</h4>
                     <div className="flex gap-3">
                       <div className="w-full space-y-1">
-                        <label className="text-[10px] text-slate-400 font-semibold uppercase">Sáng Bắt Đầu</label>
-                        <input type="time" className="text-xs p-2 border border-slate-200 rounded-lg w-full font-mono bg-white focus:ring-2 focus:ring-emerald-500 outline-none" value={config.operatingHours.morningStart} onChange={e => setConfig({...config, operatingHours: {...config.operatingHours, morningStart: e.target.value}})} />
+                        <label className="text-[10px] text-emerald-600 font-bold uppercase">Sáng Bắt Đầu</label>
+                        <input type="time" className="text-xs p-2 border border-emerald-200 rounded-lg w-full font-mono focus:ring-2 focus:ring-emerald-400 outline-none" value={config.operatingHours.morningStart} onChange={e => setConfig({...config, operatingHours: {...config.operatingHours, morningStart: e.target.value}})} />
                       </div>
                       <div className="w-full space-y-1">
-                        <label className="text-[10px] text-slate-400 font-semibold uppercase">Sáng Kết Thúc</label>
-                        <input type="time" className="text-xs p-2 border border-slate-200 rounded-lg w-full font-mono bg-white focus:ring-2 focus:ring-emerald-500 outline-none" value={config.operatingHours.morningEnd} onChange={e => setConfig({...config, operatingHours: {...config.operatingHours, morningEnd: e.target.value}})} />
+                        <label className="text-[10px] text-emerald-600 font-bold uppercase">Sáng Kết Thúc</label>
+                        <input type="time" className="text-xs p-2 border border-emerald-200 rounded-lg w-full font-mono focus:ring-2 focus:ring-emerald-400 outline-none" value={config.operatingHours.morningEnd} onChange={e => setConfig({...config, operatingHours: {...config.operatingHours, morningEnd: e.target.value}})} />
                       </div>
                     </div>
                     <div className="flex gap-3">
                       <div className="w-full space-y-1">
-                        <label className="text-[10px] text-slate-400 font-semibold uppercase">Chiều Bắt Đầu</label>
-                        <input type="time" className="text-xs p-2 border border-slate-200 rounded-lg w-full font-mono bg-white focus:ring-2 focus:ring-emerald-500 outline-none" value={config.operatingHours.afternoonStart} onChange={e => setConfig({...config, operatingHours: {...config.operatingHours, afternoonStart: e.target.value}})} />
+                        <label className="text-[10px] text-emerald-600 font-bold uppercase">Chiều Bắt Đầu</label>
+                        <input type="time" className="text-xs p-2 border border-emerald-200 rounded-lg w-full font-mono focus:ring-2 focus:ring-emerald-400 outline-none" value={config.operatingHours.afternoonStart} onChange={e => setConfig({...config, operatingHours: {...config.operatingHours, afternoonStart: e.target.value}})} />
                       </div>
                       <div className="w-full space-y-1">
-                        <label className="text-[10px] text-slate-400 font-semibold uppercase">Chiều Kết Thúc</label>
-                        <input type="time" className="text-xs p-2 border border-slate-200 rounded-lg w-full font-mono bg-white focus:ring-2 focus:ring-emerald-500 outline-none" value={config.operatingHours.afternoonEnd} onChange={e => setConfig({...config, operatingHours: {...config.operatingHours, afternoonEnd: e.target.value}})} />
+                        <label className="text-[10px] text-emerald-600 font-bold uppercase">Chiều Kết Thúc</label>
+                        <input type="time" className="text-xs p-2 border border-emerald-200 rounded-lg w-full font-mono focus:ring-2 focus:ring-emerald-400 outline-none" value={config.operatingHours.afternoonEnd} onChange={e => setConfig({...config, operatingHours: {...config.operatingHours, afternoonEnd: e.target.value}})} />
                       </div>
                     </div>
                   </div>
                 )}
 
-                <div className="space-y-2">
+                <div className="bg-white border border-emerald-100/80 rounded-2xl shadow-sm p-3 space-y-1">
                   {[
-                    { key: 'checkExactTimeYL', label: 'Bác sĩ: Trùng khớp giờ Y Lệnh' },
-                    { key: 'checkExactTimeTH', label: 'Nhân viên: Trùng khớp giờ Thực hiện' },
-                    { key: 'checkExactTimeKQ', label: 'Nhân viên: Trùng khớp giờ Kết quả' },
-                    { key: 'checkStaffOverlap', label: 'Nhân viên: Chồng chéo thời gian TH-KQ' },
-                    { key: 'checkPatientOverlap', label: 'Bệnh nhân: Chồng chéo (Trừ XN 21,22,23)' },
-                    { key: 'checkMachine', label: 'Máy TTB: Sử dụng trùng giờ cho phép' },
-                    { key: 'checkTimeLogic', label: 'Logic: Y Lệnh <= Thực hiện <= KQ' },
-                    { key: 'checkOperatingHours', label: 'Ngoài giờ: Cảnh báo giờ HC' }
+                    { key: 'checkExactTimeYL', label: 'Bác sĩ: Y Lệnh bằng nhau' },
+                    { key: 'checkExactTimeTH', label: 'Nhân viên: Giờ TH bằng nhau' },
+                    { key: 'checkExactTimeKQ', label: 'Nhân viên: Giờ KQ bằng nhau' },
+                    { key: 'checkStaffOverlap', label: 'Nhân viên: Chồng chéo ca làm' },
+                    { key: 'checkPatientOverlap', label: 'Bệnh nhân: Cùng lúc (Trừ XN)' },
+                    { key: 'checkMachine', label: 'Máy móc: Giới hạn đồng thời' },
+                    { key: 'checkTimeLogic', label: 'Logic: Y Lệnh ≤ TH ≤ KQ' },
+                    { key: 'checkOperatingHours', label: 'Giờ HC: Cảnh báo làm ngoài giờ' }
                   ].map((item) => (
-                    <label key={item.key} className="flex items-center gap-3 p-2.5 hover:bg-emerald-50/50 rounded-xl cursor-pointer transition-colors border border-transparent hover:border-emerald-100 group">
-                      <input 
-                        type="checkbox" 
-                        checked={config[item.key as keyof ValidationConfig] as boolean}
-                        onChange={(e) => setConfig({ ...config, [item.key]: e.target.checked })}
-                        className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500"
-                      />
-                      <span className="text-sm text-slate-700 font-medium group-hover:text-emerald-800 transition-colors">{item.label}</span>
+                    <label key={item.key} className="flex items-center gap-3 p-2.5 hover:bg-emerald-50/50 rounded-xl cursor-pointer transition-all group border border-transparent hover:border-emerald-100">
+                      <div className="relative flex items-center">
+                        <input 
+                          type="checkbox" 
+                          checked={config[item.key as keyof ValidationConfig] as boolean}
+                          onChange={(e) => setConfig({ ...config, [item.key]: e.target.checked })}
+                          className="peer sr-only"
+                        />
+                        <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-emerald-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                      </div>
+                      <span className="text-sm text-slate-700 font-medium group-hover:text-emerald-800">{item.label}</span>
                     </label>
                   ))}
                 </div>
-              </section>
-            </>
+              </div>
+            </div>
           )}
         </div>
 
-        {/* Main Content Area */}
-        <div className="lg:col-span-9 space-y-5">
+        {/* MAIN CONTENT AREA */}
+        <div className="lg:col-span-9">
           
           {/* TAB MAIN */}
           {activeTab === 'main' && (
-            <div className="flex flex-col h-full gap-5">
-              {/* Filter Bar */}
-              <div className="bg-white/90 backdrop-blur-md border border-blue-100/50 rounded-2xl p-4 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex items-center gap-4 shrink-0">
+            <div className="flex flex-col gap-4">
+              <div className="bg-white border border-emerald-100 rounded-2xl p-3 shadow-sm flex items-center gap-3">
                 <div className="relative flex-1">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-400" size={18} />
                   <input 
                     type="text" 
-                    placeholder="Tìm kiếm theo mã LK, mã DVKT hoặc tên..." 
-                    className="w-full pl-11 pr-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all text-sm font-medium text-slate-700"
+                    placeholder="Tìm kiếm theo mã Lượt Khám, mã DVKT hoặc Tên Dịch Vụ..." 
+                    className="w-full pl-12 pr-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:border-emerald-400 transition-all text-sm font-medium text-slate-700 placeholder:text-slate-400"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
-                <div className="flex items-center gap-2 text-sm text-emerald-700 font-mono font-bold px-4 border border-emerald-200 rounded-xl h-[42px] bg-emerald-50 shadow-sm">
-                  <Filter size={14} className="text-emerald-500" />
-                  <span>Rows: {filteredRecords.length}</span>
+                <div className="flex items-center gap-2 text-sm text-emerald-700 font-bold px-5 py-2.5 border border-emerald-200 rounded-xl bg-emerald-50 shadow-sm whitespace-nowrap">
+                  <Filter size={16} className="text-emerald-500" />
+                  <span>{filteredRecords.length} Bản Ghi</span>
                 </div>
               </div>
 
-              {/* Table Container */}
-              <div className="bg-white/90 backdrop-blur-md border border-blue-100/50 rounded-2xl overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex-1">
-                <div className="overflow-x-auto max-h-[calc(100vh-230px)] custom-scrollbar">
-                  <table className="w-full text-left border-collapse min-w-[1200px]">
-                    <thead className="sticky top-0 bg-slate-50/95 backdrop-blur z-10 border-b border-slate-200 shadow-sm">
+              <div className="bg-white border border-emerald-100/80 rounded-2xl shadow-sm overflow-hidden w-full">
+                <div className="overflow-x-hidden max-h-[calc(100vh-220px)] custom-scrollbar">
+                  <table className="w-full text-left border-collapse table-fixed">
+                    <thead className="sticky top-0 bg-slate-50/95 backdrop-blur z-10 border-b border-emerald-100 shadow-sm">
                       <tr>
-                        <th className="px-5 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-24">Mã LK</th>
-                        <th className="px-5 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-64">Dịch vụ (DVKT)</th>
-                        <th className="px-5 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-32 border-l border-slate-200/60 bg-slate-100/30">TG Y Lệnh</th>
-                        <th className="px-5 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-32 bg-slate-100/30">TG Thực hiện</th>
-                        <th className="px-5 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-32 bg-slate-100/30">TG Kết quả</th>
-                        <th className="px-5 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-32 border-l border-slate-200/60">Nhân sự</th>
-                        <th className="px-5 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-32">Máy</th>
-                        <th className="px-5 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-[350px]">Cảnh báo & Lỗi</th>
+                        <th className="px-3 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider w-[14%]">Mã LK</th>
+                        <th className="px-3 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider w-[18%]">Dịch Vụ</th>
+                        <th className="px-2 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider w-[8%] bg-slate-100/30 text-center">Y Lệnh</th>
+                        <th className="px-2 py-3 text-[10px] font-bold text-emerald-600 uppercase tracking-wider w-[8%] bg-emerald-50/50 border-x border-emerald-100/50 text-center">Thực Hiện</th>
+                        <th className="px-2 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider w-[8%] bg-slate-100/30 text-center">Kết Quả</th>
+                        <th className="px-3 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider w-[12%]">Nhân Sự</th>
+                        <th className="px-3 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider w-[12%]">Thiết Bị</th>
+                        <th className="px-3 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider w-[20%]">Lỗi / Cảnh Báo</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {filteredRecords.length === 0 ? (
                         <tr>
-                          <td colSpan={8} className="px-6 py-32 text-center">
+                          <td colSpan={8} className="px-6 py-28 text-center">
                             <div className="flex flex-col items-center gap-4 text-slate-400">
-                              <div className="bg-slate-50 p-6 rounded-full">
-                                <FileSpreadsheet size={48} className="text-slate-300" />
+                              <div className="bg-slate-50 p-6 rounded-full border border-slate-100">
+                                <FileSpreadsheet size={48} className="text-emerald-300" />
                               </div>
-                              <p className="text-sm font-medium">Chưa có dữ liệu đối chiếu. Vui lòng nhập file Excel Dữ liệu đầu vào.</p>
+                              <p className="text-sm font-medium text-slate-500">Chưa có dữ liệu. Vui lòng Tải file đầu vào để bắt đầu đối chiếu.</p>
                             </div>
                           </td>
                         </tr>
@@ -476,56 +464,44 @@ export default function App() {
                           const isWarning = recErrors.some(e => e.Loai === 'warning');
 
                           return (
-                            <tr 
-                              key={rec.id} 
-                              className={cn(
-                                "group hover:bg-slate-50/80 transition-colors",
-                                isHeavy ? "bg-red-50/40 hover:bg-red-50/60" : isWarning ? "bg-amber-50/40 hover:bg-amber-50/60" : ""
-                              )}
-                            >
-                              <td className="px-5 py-4 align-top">
-                                <div className="font-mono text-xs text-emerald-700 font-bold bg-emerald-50 px-2 py-1 rounded w-fit">{rec.MA_LK}</div>
+                            <tr key={rec.id} className={cn("hover:bg-slate-50/60 transition-colors", isHeavy ? "bg-red-50/30" : isWarning ? "bg-amber-50/20" : "")}>
+                              <td className="px-3 py-3 align-top">
+                                <div className="font-mono text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1.5 rounded-md border border-emerald-100/50 break-all leading-relaxed shadow-sm">{rec.MA_LK}</div>
                               </td>
-                              <td className="px-5 py-4 align-top">
-                                <div className="font-semibold text-sm line-clamp-2 text-slate-800 leading-snug" title={rec.TEN_DICH_VU}>{rec.TEN_DICH_VU}</div>
-                                <div className="text-[10px] text-slate-400 font-mono mt-1.5">{rec.MA_DICH_VU}</div>
+                              <td className="px-3 py-3 align-top">
+                                <div className="text-[12px] font-semibold text-slate-800 leading-snug mb-1.5 line-clamp-3" title={rec.TEN_DICH_VU}>{rec.TEN_DICH_VU}</div>
+                                <div className="text-[10px] font-mono font-medium text-slate-500 bg-slate-50 px-1 py-0.5 rounded border border-slate-100 inline-block">{rec.MA_DICH_VU}</div>
                               </td>
                               
-                              <td className="px-5 py-4 align-top font-mono text-xs text-slate-600 border-l border-slate-100">{formatDate(rec.NGAY_YL) || '—'}</td>
-                              <td className="px-5 py-4 align-top font-mono text-xs text-emerald-700 font-bold">{formatDate(rec.NGAY_TH_YL) || '—'}</td>
-                              <td className="px-5 py-4 align-top font-mono text-xs text-slate-600">{formatDate(rec.NGAY_KQ) || '—'}</td>
+                              <td className="px-2 py-3 align-top font-mono text-[10px] text-slate-600 text-center">{formatDate(rec.NGAY_YL) || '—'}</td>
+                              <td className="px-2 py-3 align-top font-mono text-[10px] text-emerald-800 font-bold bg-emerald-50/30 border-x border-emerald-50/50 text-center">{formatDate(rec.NGAY_TH_YL) || '—'}</td>
+                              <td className="px-2 py-3 align-top font-mono text-[10px] text-slate-600 text-center">{formatDate(rec.NGAY_KQ) || '—'}</td>
                               
-                              <td className="px-5 py-4 align-top border-l border-slate-100">
-                                <div className="text-xs text-slate-700 font-medium mb-1.5"><span className="text-slate-400 text-[10px] uppercase font-bold mr-1">TH:</span> {rec.NGUOI_THUC_HIEN || '—'}</div>
-                                <div className="text-xs text-slate-700 font-medium"><span className="text-slate-400 text-[10px] uppercase font-bold mr-1">YL:</span> {rec.MA_BAC_SI || '—'}</div>
+                              <td className="px-3 py-3 align-top">
+                                <div className="text-[11px] font-medium text-slate-800 mb-1.5 flex flex-col"><span className="text-[9px] font-bold text-emerald-600 w-fit bg-emerald-50 px-1 rounded mb-0.5">TH:</span><span className="break-all">{rec.NGUOI_THUC_HIEN || '—'}</span></div>
+                                <div className="text-[11px] font-medium text-slate-800 flex flex-col"><span className="text-[9px] font-bold text-blue-500 w-fit bg-blue-50 px-1 rounded mb-0.5">YL:</span><span className="break-all">{rec.MA_BAC_SI || '—'}</span></div>
                               </td>
-                              <td className="px-5 py-4 align-top">
+                              <td className="px-3 py-3 align-top">
                                 <div className={cn(
-                                  "inline-flex items-center px-2.5 py-1 rounded-md text-xs font-mono font-medium",
-                                  rec.MA_MAY ? "bg-slate-100 text-slate-700 border border-slate-200" : "bg-red-50 text-red-600 border border-red-100"
+                                  "text-[10px] font-mono font-bold px-1.5 py-1 rounded border break-all",
+                                  rec.MA_MAY ? "text-slate-600 bg-slate-100/80 border-slate-200" : "text-red-500 bg-red-50 border-red-100 inline-block"
                                 )}>
-                                  {rec.MA_MAY || 'THIẾU MÃ'}
+                                  {rec.MA_MAY || 'THIẾU'}
                                 </div>
                               </td>
-                              <td className="px-5 py-4 align-top">
-                                <div className="space-y-2">
+                              <td className="px-3 py-3 align-top">
+                                <div className="space-y-1.5">
                                   {recErrors.length > 0 ? (
                                     recErrors.map((err) => (
-                                      <div 
-                                        key={err.id} 
-                                        className={cn(
-                                          "flex items-start gap-2 text-xs px-3 py-2 rounded-lg border",
-                                          err.Loai === 'heavy' ? "bg-red-50 text-red-800 border-red-100 shadow-sm" : "bg-amber-50 text-amber-800 border-amber-100 shadow-sm"
-                                        )}
-                                      >
-                                        <AlertCircle size={14} className="shrink-0 mt-0.5" />
-                                        <span className="leading-snug font-medium">{err.NoiDung}</span>
+                                      <div key={err.id} className={cn("flex items-start gap-1.5 text-[11px] font-medium p-2 rounded border", err.Loai === 'heavy' ? "text-red-700 bg-red-50 border-red-100" : "text-amber-800 bg-amber-50 border-amber-100")}>
+                                        <AlertTriangle size={12} className="shrink-0 mt-[2px]" />
+                                        <span className="leading-snug">{err.NoiDung}</span>
                                       </div>
                                     ))
                                   ) : (
-                                    <div className="flex items-center gap-2 text-xs text-emerald-700 font-semibold px-3 py-2 border border-emerald-100 bg-emerald-50 rounded-lg w-fit shadow-sm">
-                                      <CheckCircle2 size={14} />
-                                      <span>Dữ liệu hợp lệ</span>
+                                    <div className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-1.5 rounded w-fit">
+                                      <CheckCircle2 size={12} />
+                                      <span>Hợp Lệ</span>
                                     </div>
                                   )}
                                 </div>
@@ -543,34 +519,34 @@ export default function App() {
 
           {/* TAB STAFF */}
           {activeTab === 'staff' && (
-            <div className="bg-white/90 backdrop-blur-md border border-blue-100/50 rounded-2xl p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] h-full flex flex-col">
-              <div className="flex justify-between items-center mb-8 pb-6 border-b border-slate-100 shrink-0">
+            <div className="bg-white border border-emerald-100 rounded-2xl shadow-sm p-8 h-full flex flex-col">
+              <div className="flex justify-between items-center mb-8 border-b border-slate-100 pb-5">
                 <div>
-                  <h2 className="text-2xl font-bold text-slate-800">Danh mục Nhân viên (Bảng 2)</h2>
-                  <p className="text-sm text-slate-500 mt-2 font-medium">Tải lên danh sách nhân sự (Yêu cầu cột <span className="font-mono text-emerald-600 bg-emerald-50 px-1 rounded">MACCHN</span> và <span className="font-mono text-emerald-600 bg-emerald-50 px-1 rounded">HO_TEN</span>).</p>
+                  <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Users className="text-emerald-500"/> Danh Mục Nhân Viên (Bảng 2)</h2>
+                  <p className="text-sm text-slate-500 mt-2 font-medium">Tải lên file danh sách nhân sự. Hệ thống tự động nhận diện cột <code className="bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded font-mono border border-emerald-100">MACCHN</code> và <code className="bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded font-mono border border-emerald-100">HO_TEN</code>.</p>
                 </div>
                 <input type="file" ref={staffInputRef} onChange={handleImportStaff} className="hidden" accept=".xlsx, .xls" />
-                <button onClick={() => staffInputRef.current?.click()} className="px-5 py-2.5 bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 rounded-xl font-bold text-sm transition-all shadow-sm flex items-center gap-2 cursor-pointer">
-                  <FileUp size={16}/> Import Bảng 2
+                <button onClick={() => staffInputRef.current?.click()} className="px-5 py-2.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-xl text-sm transition-all shadow-sm font-bold flex items-center gap-2">
+                  <UploadCloud size={16}/> Tải Danh Mục
                 </button>
               </div>
-              <div className="border border-slate-200 rounded-2xl overflow-hidden flex-1 min-h-[400px]">
-                <div className="overflow-y-auto h-full custom-scrollbar">
+              <div className="border border-slate-200 rounded-xl overflow-hidden flex-1 shadow-sm">
+                <div className="overflow-y-auto h-full custom-scrollbar max-h-[500px]">
                   <table className="w-full text-left text-sm">
-                    <thead className="bg-slate-50 sticky top-0 shadow-sm z-10 border-b border-slate-200">
+                    <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 z-10">
                       <tr>
-                        <th className="px-6 py-4 font-bold text-slate-600 uppercase tracking-wider text-xs w-64">CCHN / Mã NV</th>
-                        <th className="px-6 py-4 font-bold text-slate-600 uppercase tracking-wider text-xs">Họ và tên</th>
+                        <th className="px-6 py-4 font-bold text-slate-500 text-xs w-64 uppercase tracking-wider">Mã NV / CCHN</th>
+                        <th className="px-6 py-4 font-bold text-slate-500 text-xs uppercase tracking-wider">Họ và Tên Nhân Sự</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {config.staffCatalog.length === 0 ? (
-                        <tr><td colSpan={2} className="px-6 py-16 text-center text-slate-400 font-medium">Chưa có dữ liệu danh mục nhân viên</td></tr>
+                        <tr><td colSpan={2} className="px-6 py-16 text-center text-slate-400 font-medium text-sm">Chưa có dữ liệu. Vui lòng tải file để hiển thị.</td></tr>
                       ) : (
                         config.staffCatalog.map((s, i) => (
-                          <tr key={i} className="hover:bg-slate-50 transition-colors">
-                            <td className="px-6 py-3.5 font-mono text-emerald-700 font-medium bg-emerald-50/30">{s.cchn}</td>
-                            <td className="px-6 py-3.5 font-semibold text-slate-700">{s.name}</td>
+                          <tr key={i} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="px-6 py-3 font-mono font-bold text-emerald-700 text-xs">{s.cchn}</td>
+                            <td className="px-6 py-3 text-slate-800 font-medium text-sm">{s.name}</td>
                           </tr>
                         ))
                       )}
@@ -583,46 +559,46 @@ export default function App() {
 
           {/* TAB SERVICE */}
           {activeTab === 'service' && (
-            <div className="bg-white/90 backdrop-blur-md border border-blue-100/50 rounded-2xl p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] h-full flex flex-col">
-              <div className="flex justify-between items-center mb-8 pb-6 border-b border-slate-100 shrink-0">
+            <div className="bg-white border border-emerald-100 rounded-2xl shadow-sm p-8 h-full flex flex-col">
+              <div className="flex justify-between items-center mb-8 border-b border-slate-100 pb-5">
                 <div>
-                  <h2 className="text-2xl font-bold text-slate-800">Danh mục Dịch vụ (Bảng 5)</h2>
-                  <p className="text-sm text-slate-500 mt-2 font-medium">Danh mục được chia nhóm theo 2 chữ số đầu mã DVKT. Tích chọn nếu DVKT cho phép NV làm song song DV khác.</p>
+                  <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Activity className="text-emerald-500"/> Danh Mục DVKT (Bảng 5)</h2>
+                  <p className="text-sm text-slate-500 mt-2 font-medium">Bạn có thể thiết lập cho phép 1 nhân viên thực hiện dịch vụ này song song với các dịch vụ khác.</p>
                 </div>
                 <input type="file" ref={serviceInputRef} onChange={handleImportService} className="hidden" accept=".xlsx, .xls" />
-                <button onClick={() => serviceInputRef.current?.click()} className="px-5 py-2.5 bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 rounded-xl font-bold text-sm transition-all shadow-sm flex items-center gap-2 cursor-pointer">
-                  <FileUp size={16}/> Import Bảng 5
+                <button onClick={() => serviceInputRef.current?.click()} className="px-5 py-2.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-xl text-sm transition-all shadow-sm font-bold flex items-center gap-2">
+                  <UploadCloud size={16}/> Tải Bảng 5
                 </button>
               </div>
               
-              <div className="border border-slate-200 rounded-2xl overflow-hidden flex-1 min-h-[400px]">
-                <div className="overflow-y-auto h-full custom-scrollbar">
+              <div className="border border-slate-200 rounded-xl overflow-hidden flex-1 shadow-sm">
+                <div className="overflow-y-auto h-full custom-scrollbar max-h-[500px]">
                   <table className="w-full text-left text-sm">
-                    <thead className="bg-slate-50 sticky top-0 shadow-sm z-10 border-b border-slate-200">
+                    <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 z-10">
                       <tr>
-                        <th className="px-6 py-4 font-bold text-slate-600 uppercase tracking-wider text-xs w-48">Mã Dịch vụ</th>
-                        <th className="px-6 py-4 font-bold text-slate-600 uppercase tracking-wider text-xs">Tên Dịch vụ</th>
-                        <th className="px-6 py-4 font-bold text-slate-600 uppercase tracking-wider text-xs text-center w-64" title="Cho phép NV làm DV khác trong lúc thực hiện DV này">NV được chồng chéo giờ</th>
+                        <th className="px-6 py-4 font-bold text-slate-500 text-xs w-48 uppercase tracking-wider">Mã Dịch Vụ</th>
+                        <th className="px-6 py-4 font-bold text-slate-500 text-xs uppercase tracking-wider">Tên Dịch Vụ</th>
+                        <th className="px-6 py-4 font-bold text-emerald-600 text-xs text-center w-64 uppercase tracking-wider bg-emerald-50/50">Cho Phép NV Làm Trùng Giờ</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {groupedServices.length === 0 ? (
-                        <tr><td colSpan={3} className="px-6 py-16 text-center text-slate-400 font-medium">Chưa có dữ liệu danh mục dịch vụ</td></tr>
+                        <tr><td colSpan={3} className="px-6 py-16 text-center text-slate-400 font-medium text-sm">Chưa có dữ liệu Bảng 5.</td></tr>
                       ) : (
                         groupedServices.map(([groupCode, services]) => (
                           <React.Fragment key={groupCode}>
-                            <tr className="bg-emerald-600 sticky top-[49px] z-[5] shadow-sm">
-                              <td colSpan={3} className="px-6 py-2.5 font-bold text-white text-xs uppercase tracking-wider flex items-center gap-2">
-                                <span className="bg-white/20 px-2 py-0.5 rounded shadow-inner">Nhóm {groupCode}</span>
-                                <span>— {services.length} Dịch vụ</span>
+                            <tr className="bg-slate-800 border-y border-slate-900 sticky top-[48px] z-[5]">
+                              <td colSpan={3} className="px-6 py-2 text-[11px] font-bold text-white uppercase tracking-wider flex items-center gap-3">
+                                <span className="bg-emerald-500/30 text-emerald-300 px-2 py-0.5 rounded">NHÓM {groupCode}</span>
+                                <span className="text-slate-400">({services.length} Dịch Vụ)</span>
                               </td>
                             </tr>
                             {services.map((s, i) => (
-                              <tr key={`${groupCode}-${i}`} className="hover:bg-slate-50 transition-colors">
-                                <td className="px-6 py-3.5 font-mono text-slate-500 text-xs">{s.code}</td>
-                                <td className="px-6 py-3.5 font-medium text-slate-800 leading-relaxed">{s.name}</td>
-                                <td className="px-6 py-3.5 text-center bg-slate-50/50 border-l border-slate-100">
-                                  <label className="inline-flex items-center justify-center p-2 rounded-lg hover:bg-emerald-50 cursor-pointer transition-colors group">
+                              <tr key={`${groupCode}-${i}`} className="hover:bg-slate-50/80 transition-colors">
+                                <td className="px-6 py-3 font-mono text-slate-500 text-xs">{s.code}</td>
+                                <td className="px-6 py-3 text-slate-800 font-medium text-sm">{s.name}</td>
+                                <td className="px-6 py-3 text-center flex justify-center bg-emerald-50/20 border-l border-emerald-50">
+                                  <label className="relative flex items-center cursor-pointer">
                                     <input 
                                       type="checkbox" 
                                       checked={s.allowStaffOverlap} 
@@ -634,8 +610,9 @@ export default function App() {
                                           setConfig({...config, serviceCatalog: newCat});
                                         }
                                       }}
-                                      className="w-5 h-5 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer transition-all group-hover:border-emerald-400"
+                                      className="sr-only peer"
                                     />
+                                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
                                   </label>
                                 </td>
                               </tr>
@@ -652,37 +629,37 @@ export default function App() {
 
           {/* TAB MACHINE */}
           {activeTab === 'machine' && (
-            <div className="bg-white/90 backdrop-blur-md border border-blue-100/50 rounded-2xl p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] h-full flex flex-col">
-              <div className="flex justify-between items-center mb-8 pb-6 border-b border-slate-100 shrink-0">
+            <div className="bg-white border border-emerald-100 rounded-2xl shadow-sm p-8 h-full flex flex-col">
+              <div className="flex justify-between items-center mb-8 border-b border-slate-100 pb-5">
                 <div>
-                  <h2 className="text-2xl font-bold text-slate-800">Danh mục Máy / TTB (Bảng 6)</h2>
-                  <p className="text-sm text-slate-500 mt-2 font-medium">Thiết lập các thiết bị cho phép dùng trùng lặp (ví dụ 1 máy chiếu chụp cho nhiều BN cùng lúc).</p>
+                  <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Server className="text-emerald-500"/> Danh Mục Thiết Bị (Bảng 6)</h2>
+                  <p className="text-sm text-slate-500 mt-2 font-medium">Bật cấu hình này nếu Thiết bị đó (ví dụ máy X-Quang) cho phép nhiều bệnh nhân sử dụng cùng 1 lúc.</p>
                 </div>
                 <input type="file" ref={machineInputRef} onChange={handleImportMachine} className="hidden" accept=".xlsx, .xls" />
-                <button onClick={() => machineInputRef.current?.click()} className="px-5 py-2.5 bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 rounded-xl font-bold text-sm transition-all shadow-sm flex items-center gap-2 cursor-pointer">
-                  <FileUp size={16}/> Import Bảng 6
+                <button onClick={() => machineInputRef.current?.click()} className="px-5 py-2.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-xl text-sm transition-all shadow-sm font-bold flex items-center gap-2">
+                  <UploadCloud size={16}/> Tải Bảng 6
                 </button>
               </div>
-              <div className="border border-slate-200 rounded-2xl overflow-hidden flex-1 min-h-[400px]">
-                <div className="overflow-y-auto h-full custom-scrollbar">
+              <div className="border border-slate-200 rounded-xl overflow-hidden flex-1 shadow-sm">
+                <div className="overflow-y-auto h-full custom-scrollbar max-h-[500px]">
                   <table className="w-full text-left text-sm">
-                    <thead className="bg-slate-50 sticky top-0 shadow-sm z-10 border-b border-slate-200">
+                    <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 z-10">
                       <tr>
-                        <th className="px-6 py-4 font-bold text-slate-600 uppercase tracking-wider text-xs w-48">Mã Máy</th>
-                        <th className="px-6 py-4 font-bold text-slate-600 uppercase tracking-wider text-xs">Tên Máy</th>
-                        <th className="px-6 py-4 font-bold text-slate-600 uppercase tracking-wider text-xs text-center w-64">Được phép trùng nhiều BN</th>
+                        <th className="px-6 py-4 font-bold text-slate-500 text-xs w-48 uppercase tracking-wider">Mã Thiết Bị</th>
+                        <th className="px-6 py-4 font-bold text-slate-500 text-xs uppercase tracking-wider">Tên Thiết Bị / Máy Móc</th>
+                        <th className="px-6 py-4 font-bold text-emerald-600 text-xs text-center w-64 uppercase tracking-wider bg-emerald-50/50">Cho Phép Nhiều BN Trùng Giờ</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {config.machineCatalog.length === 0 ? (
-                        <tr><td colSpan={3} className="px-6 py-16 text-center text-slate-400 font-medium">Chưa có dữ liệu danh mục máy</td></tr>
+                        <tr><td colSpan={3} className="px-6 py-16 text-center text-slate-400 font-medium text-sm">Chưa có dữ liệu Bảng 6.</td></tr>
                       ) : (
                         config.machineCatalog.map((m, i) => (
-                          <tr key={i} className="hover:bg-slate-50 transition-colors">
-                            <td className="px-6 py-3.5 font-mono text-slate-500 text-xs">{m.code}</td>
-                            <td className="px-6 py-3.5 font-medium text-slate-800">{m.name}</td>
-                            <td className="px-6 py-3.5 text-center bg-slate-50/50 border-l border-slate-100">
-                              <label className="inline-flex items-center justify-center p-2 rounded-lg hover:bg-emerald-50 cursor-pointer transition-colors group">
+                          <tr key={i} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="px-6 py-3 font-mono text-slate-500 text-xs">{m.code}</td>
+                            <td className="px-6 py-3 text-slate-800 font-medium text-sm">{m.name}</td>
+                            <td className="px-6 py-3 text-center flex justify-center bg-emerald-50/20 border-l border-emerald-50">
+                              <label className="relative flex items-center cursor-pointer">
                                 <input 
                                   type="checkbox" 
                                   checked={m.allowOverlap} 
@@ -691,8 +668,9 @@ export default function App() {
                                     newCat[i].allowOverlap = e.target.checked;
                                     setConfig({...config, machineCatalog: newCat});
                                   }}
-                                  className="w-5 h-5 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer transition-all group-hover:border-emerald-400"
+                                  className="sr-only peer"
                                 />
+                                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
                               </label>
                             </td>
                           </tr>
@@ -704,14 +682,13 @@ export default function App() {
               </div>
             </div>
           )}
-
         </div>
       </main>
       
       <style dangerouslySetInnerHTML={{__html: `
         .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
       `}} />
     </div>
