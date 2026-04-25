@@ -295,7 +295,8 @@ export default function App() {
       const catalog = data.map((r: any) => ({
         code: String(getCol(r, ['MA_DICH_VU', 'MA_DVKT', 'Mã DV', 'MaDVKT', 'MA_TUONG_DUONG']) || '').trim().toUpperCase(),
         name: String(getCol(r, ['TEN_DICH_VU', 'TEN_DVKT', 'Tên DVKT', 'TEN_DVKT_PHEDUYET', 'TEN_DVKT_GIA']) || '').trim(),
-        allowStaffOverlap: Boolean(getCol(r, ['CHO_PHEP_NV_TRUNG', 'ChoPhepTrung', 'AllowStaffOverlap']))
+        allowStaffOverlap: Boolean(getCol(r, ['CHO_PHEP_NV_TRUNG', 'ChoPhepTrung', 'AllowStaffOverlap'])),
+        noMachineRequired: Boolean(getCol(r, ['KHONG_CAN_MAY', 'KhongCanMay', 'NoMachineRequired']))
       })).filter(x => x.code && x.code !== 'UNDEFINED' && x.code !== '');
       updateConfig({ ...config, serviceCatalog: catalog });
     };
@@ -877,16 +878,17 @@ export default function App() {
                         <th className="px-6 py-4 font-bold text-slate-500 text-xs w-48 uppercase tracking-wider">Mã Dịch Vụ</th>
                         <th className="px-6 py-4 font-bold text-slate-500 text-xs uppercase tracking-wider">Tên Dịch Vụ</th>
                         <th className="px-6 py-4 font-bold text-emerald-600 text-xs text-center w-64 uppercase tracking-wider bg-emerald-50/50">Cho Phép NV Làm Chồng Chéo Giờ</th>
+                        <th className="px-6 py-4 font-bold text-amber-600 text-xs text-center w-48 uppercase tracking-wider bg-amber-50/50">Không Cần Máy<br/><span className="text-[10px] font-medium">(VD: Khám bệnh)</span></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {groupedFilteredServices.length === 0 ? (
-                        <tr><td colSpan={3} className="px-6 py-16 text-center text-slate-400 font-medium text-sm">Chưa có dữ liệu hoặc không tìm thấy.</td></tr>
+                        <tr><td colSpan={4} className="px-6 py-16 text-center text-slate-400 font-medium text-sm">Chưa có dữ liệu hoặc không tìm thấy.</td></tr>
                       ) : (
                         groupedFilteredServices.map(([groupCode, services]) => (
                           <React.Fragment key={groupCode}>
                             <tr className="bg-slate-800 border-y border-slate-900 sticky top-[48px] z-[5]">
-                              <td colSpan={3} className="px-6 py-2 text-[11px] font-bold text-white uppercase tracking-wider flex items-center gap-3">
+                              <td colSpan={4} className="px-6 py-2 text-[11px] font-bold text-white uppercase tracking-wider flex items-center gap-3">
                                 <span className="bg-emerald-500/30 text-emerald-300 px-2 py-0.5 rounded">NHÓM {groupCode}</span>
                                 <span className="text-slate-400">({services.length} Dịch Vụ)</span>
                               </td>
@@ -912,6 +914,25 @@ export default function App() {
                                       className="sr-only peer disabled:cursor-not-allowed"
                                     />
                                     <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                                  </label>
+                                </td>
+                                <td className="px-6 py-3 text-center flex justify-center bg-amber-50/20 border-l border-amber-50">
+                                  <label className="relative flex items-center cursor-pointer">
+                                    <input 
+                                      type="checkbox" 
+                                      disabled={clinicCode === 'GUEST'}
+                                      checked={!!s.noMachineRequired} 
+                                      onChange={(e) => {
+                                        const newCat = [...config.serviceCatalog];
+                                        const itemIdx = newCat.findIndex(x => x.code === s.code);
+                                        if(itemIdx > -1) {
+                                          newCat[itemIdx].noMachineRequired = e.target.checked;
+                                          updateConfig({...config, serviceCatalog: newCat});
+                                        }
+                                      }}
+                                      className="sr-only peer disabled:cursor-not-allowed"
+                                    />
+                                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
                                   </label>
                                 </td>
                               </tr>

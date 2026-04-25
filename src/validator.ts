@@ -8,8 +8,34 @@ function checkExactMatch(t1: Date, t2: Date) {
   return t1.getTime() === t2.getTime();
 }
 
+function formatTimeOnly(d: Date | null) {
+  if (!d) return '';
+  return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+}
+
 export function validateRecords(records: DVKTRecord[], config: ValidationConfig): ErrorLog[] {
   const errors: ErrorLog[] = [];
+
+  // ============================================
+  // 0. Check Thiếu Mã Máy (Trừ khi DVKT không yêu cầu máy)
+  // ============================================
+  records.forEach(rec => {
+    let noMachine = false;
+    if (config.serviceCatalog) {
+      const svcCat = config.serviceCatalog.find(s => s.code === rec.MA_DICH_VU);
+      if (svcCat?.noMachineRequired) noMachine = true;
+    }
+    if (!noMachine && !rec.MA_MAY) {
+      errors.push({
+        id: Math.random().toString(36).substr(2, 9),
+        recordId: rec.id,
+        MA_LK: rec.MA_LK,
+        MA_DICH_VU: rec.MA_DICH_VU,
+        NoiDung: `Thiếu mã máy thực hiện DVKT (DV: '${rec.TEN_DICH_VU}' yêu cầu phải có mã máy, nếu đây là Khám bệnh hãy tích Không Cần Máy ở Danh Mục)`,
+        Loai: 'heavy'
+      });
+    }
+  });
 
   // ============================================
   // 1. Group by Bác Sĩ (Check Trùng giờ Y Lệnh)
@@ -35,7 +61,7 @@ export function validateRecords(records: DVKTRecord[], config: ValidationConfig)
                 recordId: r1.id,
                 MA_LK: r1.MA_LK,
                 MA_DICH_VU: r1.MA_DICH_VU,
-                NoiDung: `Trùng giờ Y Lệnh của bác sĩ với bệnh nhân khác (${r2.MA_LK})`,
+                NoiDung: `Trùng giờ Y Lệnh lúc ${formatTimeOnly(r1.NGAY_YL)} của bác sĩ với BN khác (Mã LK: ${r2.MA_LK})`,
                 Loai: 'heavy'
               });
               errors.push({
@@ -43,7 +69,7 @@ export function validateRecords(records: DVKTRecord[], config: ValidationConfig)
                 recordId: r2.id,
                 MA_LK: r2.MA_LK,
                 MA_DICH_VU: r2.MA_DICH_VU,
-                NoiDung: `Trùng giờ Y Lệnh của bác sĩ với bệnh nhân khác (${r1.MA_LK})`,
+                NoiDung: `Trùng giờ Y Lệnh lúc ${formatTimeOnly(r2.NGAY_YL)} của bác sĩ với BN khác (Mã LK: ${r1.MA_LK})`,
                 Loai: 'heavy'
               });
             }
@@ -84,7 +110,7 @@ export function validateRecords(records: DVKTRecord[], config: ValidationConfig)
               recordId: r1.id,
               MA_LK: r1.MA_LK,
               MA_DICH_VU: r1.MA_DICH_VU,
-              NoiDung: `Trùng đúng giờ Thực hiện của nhân viên (${staffName}) với BN (${r2.MA_LK})`,
+              NoiDung: `Trùng đúng giờ Thực hiện lúc ${formatTimeOnly(r1.NGAY_TH_YL)} của NV '${staffName}' với BN khác (Mã LK: ${r2.MA_LK})`,
               Loai: 'heavy'
             });
             errors.push({
@@ -92,7 +118,7 @@ export function validateRecords(records: DVKTRecord[], config: ValidationConfig)
               recordId: r2.id,
               MA_LK: r2.MA_LK,
               MA_DICH_VU: r2.MA_DICH_VU,
-              NoiDung: `Trùng đúng giờ Thực hiện của nhân viên (${staffName}) với BN (${r1.MA_LK})`,
+              NoiDung: `Trùng đúng giờ Thực hiện lúc ${formatTimeOnly(r2.NGAY_TH_YL)} của NV '${staffName}' với BN khác (Mã LK: ${r1.MA_LK})`,
               Loai: 'heavy'
             });
           }
@@ -106,7 +132,7 @@ export function validateRecords(records: DVKTRecord[], config: ValidationConfig)
               recordId: r1.id,
               MA_LK: r1.MA_LK,
               MA_DICH_VU: r1.MA_DICH_VU,
-              NoiDung: `Trùng đúng giờ Kết quả của nhân viên (${staffName}) với BN (${r2.MA_LK})`,
+              NoiDung: `Trùng đúng giờ Kết quả lúc ${formatTimeOnly(r1.NGAY_KQ)} của NV '${staffName}' với BN khác (Mã LK: ${r2.MA_LK})`,
               Loai: 'heavy'
             });
             errors.push({
@@ -114,7 +140,7 @@ export function validateRecords(records: DVKTRecord[], config: ValidationConfig)
               recordId: r2.id,
               MA_LK: r2.MA_LK,
               MA_DICH_VU: r2.MA_DICH_VU,
-              NoiDung: `Trùng đúng giờ Kết quả của nhân viên (${staffName}) với BN (${r1.MA_LK})`,
+              NoiDung: `Trùng đúng giờ Kết quả lúc ${formatTimeOnly(r2.NGAY_KQ)} của NV '${staffName}' với BN khác (Mã LK: ${r1.MA_LK})`,
               Loai: 'heavy'
             });
           }
@@ -136,14 +162,14 @@ export function validateRecords(records: DVKTRecord[], config: ValidationConfig)
               }
 
               if (!isAllowed) {
-                const scope1 = r1.MA_LK === r2.MA_LK ? "cùng BN này" : `BN khác (${r2.MA_LK})`;
-                const scope2 = r1.MA_LK === r2.MA_LK ? "cùng BN này" : `BN khác (${r1.MA_LK})`;
+                const scope1 = r1.MA_LK === r2.MA_LK ? "cùng BN này" : `BN khác (Mã LK: ${r2.MA_LK})`;
+                const scope2 = r1.MA_LK === r2.MA_LK ? "cùng BN này" : `BN khác (Mã LK: ${r1.MA_LK})`;
                 errors.push({
                   id: Math.random().toString(36).substr(2, 9),
                   recordId: r1.id,
                   MA_LK: r1.MA_LK,
                   MA_DICH_VU: r1.MA_DICH_VU,
-                  NoiDung: `Thời gian làm bị chồng chéo với ${scope1} (DV: ${r2.TEN_DICH_VU})`,
+                  NoiDung: `Thời gian làm (${formatTimeOnly(r1.NGAY_TH_YL)} - ${formatTimeOnly(r1.NGAY_KQ)}) bị chồng chéo với ${scope1} (DV: ${r2.TEN_DICH_VU})`,
                   Loai: 'heavy'
                 });
                 errors.push({
@@ -151,7 +177,7 @@ export function validateRecords(records: DVKTRecord[], config: ValidationConfig)
                   recordId: r2.id,
                   MA_LK: r2.MA_LK,
                   MA_DICH_VU: r2.MA_DICH_VU,
-                  NoiDung: `Thời gian làm bị chồng chéo với ${scope2} (DV: ${r1.TEN_DICH_VU})`,
+                  NoiDung: `Thời gian làm (${formatTimeOnly(r2.NGAY_TH_YL)} - ${formatTimeOnly(r2.NGAY_KQ)}) bị chồng chéo với ${scope2} (DV: ${r1.TEN_DICH_VU})`,
                   Loai: 'heavy'
                 });
               }
@@ -208,7 +234,7 @@ export function validateRecords(records: DVKTRecord[], config: ValidationConfig)
                 recordId: r1.id,
                 MA_LK: r1.MA_LK,
                 MA_DICH_VU: r1.MA_DICH_VU,
-                NoiDung: `Máy không cho phép trùng '${machineName}' bị sử dụng đồng thời cho BN khác (${r2.MA_LK})`,
+                NoiDung: `Máy cấm trùng '${machineName}' bị sử dụng đồng thời (${formatTimeOnly(r1.NGAY_TH_YL)} - ${formatTimeOnly(r1.NGAY_KQ)}) cho BN khác (Mã LK: ${r2.MA_LK})`,
                 Loai: 'heavy'
               });
               errors.push({
@@ -216,7 +242,7 @@ export function validateRecords(records: DVKTRecord[], config: ValidationConfig)
                 recordId: r2.id,
                 MA_LK: r2.MA_LK,
                 MA_DICH_VU: r2.MA_DICH_VU,
-                NoiDung: `Máy không cho phép trùng '${machineName}' bị sử dụng đồng thời cho BN khác (${r1.MA_LK})`,
+                NoiDung: `Máy cấm trùng '${machineName}' bị sử dụng đồng thời (${formatTimeOnly(r2.NGAY_TH_YL)} - ${formatTimeOnly(r2.NGAY_KQ)}) cho BN khác (Mã LK: ${r1.MA_LK})`,
                 Loai: 'heavy'
               });
             }
@@ -258,7 +284,7 @@ export function validateRecords(records: DVKTRecord[], config: ValidationConfig)
                 recordId: r1.id,
                 MA_LK: maLK,
                 MA_DICH_VU: r1.MA_DICH_VU,
-                NoiDung: `Bệnh nhân bị chồng chéo thời gian làm với DV '${r2.TEN_DICH_VU}'`,
+                NoiDung: `Bệnh nhân này bị chồng chéo thời gian làm (${formatTimeOnly(r1.NGAY_TH_YL)} - ${formatTimeOnly(r1.NGAY_KQ)}) với chính DV khác '${r2.TEN_DICH_VU}'`,
                 Loai: 'warning'
               });
             }

@@ -37,6 +37,7 @@ export interface ServiceCatalog {
   code: string;
   name: string;
   allowStaffOverlap: boolean; // DVKT ĐƯỢC PHÉP chồng chéo NV (trong lúc làm DV này, NV được đi làm DV khác)
+  noMachineRequired?: boolean;
 }
 
 export interface OperatingHours {
