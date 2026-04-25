@@ -106,6 +106,8 @@ export default function App() {
       if (code === 'GUEST') {
         setClinicCode('GUEST');
         setAuthStatus('auth');
+        setConfig(defaultConfig);
+        localStorage.removeItem('check_xml_config_v3');
         return;
       }
       
@@ -128,10 +130,9 @@ export default function App() {
         // Đã tồn tại => Tải cấu hình và vào thẳng
         setClinicCode(code);
         localStorage.setItem('clinic_code', code);
-        if (data?.config) {
-           setConfig(data.config);
-           localStorage.setItem('check_xml_config_v3', JSON.stringify(data.config));
-        }
+        const fetchedConfig = data?.config || defaultConfig;
+        setConfig(fetchedConfig);
+        localStorage.setItem('check_xml_config_v3', JSON.stringify(fetchedConfig));
         setAuthStatus('auth');
       }
     } catch (err: any) {
@@ -150,6 +151,8 @@ export default function App() {
     setIsAdmin(false);
     setClinicCode('GUEST');
     localStorage.setItem('clinic_code', 'GUEST');
+    setConfig(defaultConfig);
+    localStorage.removeItem('check_xml_config_v3');
     setAuthStatus('auth');
   };
 
@@ -157,6 +160,8 @@ export default function App() {
     setClinicCode(null);
     setIsAdmin(false);
     localStorage.removeItem('clinic_code');
+    setConfig(defaultConfig);
+    localStorage.removeItem('check_xml_config_v3');
     setAuthStatus('unauth');
   };
 
