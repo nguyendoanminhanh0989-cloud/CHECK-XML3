@@ -201,6 +201,33 @@ export default function App() {
         parseInt(str.substring(10,12))
       );
     }
+    
+    // Hỗ trợ parse dd/mm/yyyy hh:mm
+    if (str.includes('/')) {
+      const parts = str.split(' ');
+      const datePart = parts[0];
+      const timePart = parts[1] || '00:00';
+      const dParts = datePart.split('/');
+      if (dParts.length === 3) {
+        // js Date expects (year, monthIndex, day)
+        // Check if it's dd/mm/yyyy or yyyy/mm/dd
+        let year, month, day;
+        if (dParts[0].length === 4) {
+          year = parseInt(dParts[0]); month = parseInt(dParts[1]) - 1; day = parseInt(dParts[2]);
+        } else {
+          day = parseInt(dParts[0]); month = parseInt(dParts[1]) - 1; year = parseInt(dParts[2]);
+        }
+        
+        const tParts = timePart.split(':');
+        const h = parseInt(tParts[0] || '0');
+        const m = parseInt(tParts[1] || '0');
+        const s = parseInt(tParts[2] || '0');
+        
+        const d = new Date(year, month, day, h, m, s);
+        if (!isNaN(d.getTime())) return d;
+      }
+    }
+
     const d = new Date(str);
     return isNaN(d.getTime()) ? null : d;
   };
@@ -234,10 +261,10 @@ export default function App() {
             MA_LK: String(getCol(row, ['MA_LK', 'MaBN', 'Mã LK', 'Mã BN']) || '').trim().toUpperCase(),
             MA_DICH_VU: String(getCol(row, ['MA_DICH_VU', 'MA_THUOC', 'MaDVKT', 'Mã DVKT']) || '').trim().toUpperCase(),
             TEN_DICH_VU: String(getCol(row, ['TEN_DICH_VU', 'TEN_THUOC', 'TenDVKT', 'Tên DVKT']) || '').trim(),
-            NGAY_YL: parseDateString(getCol(row, ['NGAYGIO_YL', 'NGAY_YL', 'ThoiGianYLenh', 'Ngày Y lệnh'])),
-            NGAY_TH_YL: parseDateString(getCol(row, ['NGAYGIO_TH_YL', 'NGAY_TH_YL', 'ThoiGianThucHien', 'Ngày thực hiện'])),
-            NGAY_KQ: parseDateString(getCol(row, ['NGAYGIO_KQ', 'NGAY_KQ', 'ThoiGianKetQua', 'Ngày kết quả'])),
-            MA_BAC_SI: String(getCol(row, ['MA_BAC_SI', 'NguoiChiDinh', 'Bác sĩ']) || '').trim().toUpperCase(),
+            NGAY_YL: parseDateString(getCol(row, ['NGAYGIO_YL', 'NGAY_YL', 'NGAY_Y_LENH', 'ThoiGianYLenh', 'Ngày Y lệnh', 'Thời gian Y lệnh', 'Thời gian chỉ định'])),
+            NGAY_TH_YL: parseDateString(getCol(row, ['NGAYGIO_TH_YL', 'NGAY_TH_YL', 'NGAY_TH', 'NGAY_THUC_HIEN', 'NGAYGIO_TH', 'ThoiGianThucHien', 'Ngày thực hiện', 'Thời gian thực hiện'])),
+            NGAY_KQ: parseDateString(getCol(row, ['NGAYGIO_KQ', 'NGAY_KQ', 'NGAY_KT', 'NGAY_KET_QUA', 'NGAY_KET_THUC', 'ThoiGianKetQua', 'Ngày kết quả', 'Ngày kết thúc', 'Thời gian kết thúc'])),
+            MA_BAC_SI: String(getCol(row, ['MA_BAC_SI', 'NguoiChiDinh', 'Bác sĩ', 'Mã Bác Sĩ']) || '').trim().toUpperCase(),
             NGUOI_THUC_HIEN: String(getCol(row, ['NGUOI_THUC_HIEN', 'NguoiThucHien', 'Người thực hiện', 'MACCHN', 'CCHN']) || '').trim().toUpperCase(),
             MA_MAY: String(getCol(row, ['MA_MAY', 'MaMay', 'Mã máy']) || '').trim().toUpperCase(),
             LOAI_BIEU: row['MA_THUOC'] ? 'THUOC' : 'CLS',
