@@ -808,12 +808,18 @@ export default function App() {
                                 <div className="text-[11px] font-medium text-slate-800 flex flex-col"><span className="text-[9px] font-bold text-blue-500 w-fit bg-blue-50 px-1 rounded mb-0.5">YL:</span><span className="break-all">{rec.MA_BAC_SI || '—'}</span></div>
                               </td>
                               <td className="px-3 py-3 align-top">
-                                <div className={cn(
-                                  "text-[10px] font-mono font-bold px-1.5 py-1 rounded border break-all",
-                                  rec.MA_MAY ? "text-slate-600 bg-slate-100/80 border-slate-200" : "text-red-500 bg-red-50 border-red-100 inline-block"
-                                )}>
-                                  {rec.MA_MAY || 'THIẾU'}
-                                </div>
+                                {(() => {
+                                  const svc = config.serviceCatalog.find(s => s.code === rec.MA_DICH_VU);
+                                  const isNoMachine = !!svc?.noMachineRequired;
+                                  
+                                  if (rec.MA_MAY) {
+                                    return <div className="text-[10px] font-mono font-bold px-1.5 py-1 rounded border break-all text-slate-600 bg-slate-100/80 border-slate-200">{rec.MA_MAY}</div>;
+                                  } else if (isNoMachine) {
+                                    return <div className="text-[10px] font-bold px-1.5 py-1 rounded border break-all text-slate-400 bg-slate-50 border-slate-100 inline-block w-fit">KHÔNG Y/C</div>;
+                                  } else {
+                                    return <div className="text-[10px] font-bold px-1.5 py-1 rounded border break-all text-red-500 bg-red-50 border-red-100 inline-block w-fit">THIẾU</div>;
+                                  }
+                                })()}
                               </td>
                               <td className="px-3 py-3 align-top">
                                 <div className="space-y-1.5">
