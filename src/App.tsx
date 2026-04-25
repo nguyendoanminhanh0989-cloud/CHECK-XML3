@@ -191,12 +191,20 @@ export default function App() {
   const parseDateString = (val: any): Date | null => {
     if (!val) return null;
     if (val instanceof Date) return val;
+    
+    let strVal = val;
     // Hỗ trợ số serial của Excel (VD: 45000.5)
     if (typeof val === 'number') {
-      const d = new Date((val - 25569) * 86400 * 1000);
-      return isNaN(d.getTime()) ? null : d;
+      // Nếu số nhỏ hơn 100,000 thì khả năng cao là Excel Serial Date (100,000 là năm 2173)
+      if (val < 100000) {
+        const d = new Date((val - 25569) * 86400 * 1000);
+        return isNaN(d.getTime()) ? null : d;
+      }
+      // Nếu số lớn (VD: 202511010732) thì convert thành string để dùng logic cắt chuỗi 12 số
+      strVal = String(val);
     }
-    const str = String(val).trim();
+    
+    const str = String(strVal).trim();
     if (str.length === 12 && !isNaN(Number(str))) {
       return new Date(
         parseInt(str.substring(0,4)),
