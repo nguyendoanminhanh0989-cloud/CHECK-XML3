@@ -191,6 +191,11 @@ export default function App() {
   const parseDateString = (val: any): Date | null => {
     if (!val) return null;
     if (val instanceof Date) return val;
+    // Hỗ trợ số serial của Excel (VD: 45000.5)
+    if (typeof val === 'number') {
+      const d = new Date((val - 25569) * 86400 * 1000);
+      return isNaN(d.getTime()) ? null : d;
+    }
     const str = String(val).trim();
     if (str.length === 12 && !isNaN(Number(str))) {
       return new Date(
@@ -233,8 +238,13 @@ export default function App() {
   };
 
   const getCol = (row: any, names: string[]) => {
-    for (const n of names) {
-      if (row[n] !== undefined) return row[n];
+    const rowKeys = Object.keys(row);
+    const normalize = (s: string) => s.toLowerCase().replace(/[\s_\-]/g, '');
+    const targetNames = names.map(normalize);
+    for (const key of rowKeys) {
+      if (targetNames.includes(normalize(key))) {
+        return row[key];
+      }
     }
     return '';
   };
