@@ -239,7 +239,10 @@ export default function App() {
 
   const getCol = (row: any, names: string[]) => {
     const rowKeys = Object.keys(row);
-    const normalize = (s: string) => s.toLowerCase().replace(/[\s_\-]/g, '');
+    const normalize = (s: string) => {
+      if (!s) return '';
+      return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[\s_\-]/g, '');
+    };
     const targetNames = names.map(normalize);
     for (const key of rowKeys) {
       if (targetNames.includes(normalize(key))) {
