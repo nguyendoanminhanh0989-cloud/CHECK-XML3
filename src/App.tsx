@@ -113,19 +113,26 @@ export default function App() {
       
       const { data, error } = await supabase.from('clinics').select('status, config').eq('id', code).single();
       
-      if (error && error.code === 'PGRST116') {
-        // Not found => Tự động tạo kho dữ liệu mới cho mã này
-        const { error: insertErr } = await supabase.from('clinics').insert([{ id: code, status: 'approved', config: defaultConfig }]);
-        if (insertErr) {
-          setAuthMessage('Chưa có bảng "clinics" trên Supabase. Vui lòng chạy lệnh SQL tạo bảng trước!');
+      if (error) {
+        if (error.code === 'PGRST116') {
+          // Not found => Tự động tạo kho dữ liệu mới cho mã này
+          const { error: insertErr } = await supabase.from('clinics').insert([{ id: code, status: 'approved', config: defaultConfig }]);
+          if (insertErr) {
+            setAuthMessage('Lỗi cấp phát: ' + insertErr.message + '. Bạn đã chạy lệnh SQL tạo bảng clinics trên Supabase chưa?');
+            setAuthStatus('unauth');
+            return;
+          }
+          setClinicCode(code);
+          localStorage.setItem('clinic_code', code);
+          setConfig(defaultConfig);
+          localStorage.setItem('check_xml_config_v3', JSON.stringify(defaultConfig));
+          setAuthStatus('auth');
+        } else {
+          // PGRST205 or other
+          setAuthMessage('Lỗi máy chủ Supabase: ' + error.message + '. Bạn đã chạy lệnh SQL tạo bảng clinics chưa?');
           setAuthStatus('unauth');
           return;
         }
-        setClinicCode(code);
-        localStorage.setItem('clinic_code', code);
-        setConfig(defaultConfig);
-        localStorage.setItem('check_xml_config_v3', JSON.stringify(defaultConfig));
-        setAuthStatus('auth');
       } else {
         // Đã tồn tại => Tải cấu hình và vào thẳng
         setClinicCode(code);
@@ -171,7 +178,11 @@ export default function App() {
     localStorage.setItem('check_xml_config_v3', JSON.stringify(newConfig));
     if (clinicCode && clinicCode !== 'GUEST') {
       setIsSyncing(true);
-      await supabase.from('clinics').update({ config: newConfig }).eq('id', clinicCode);
+      const { error } = await supabase.from('clinics').update({ config: newConfig }).eq('id', clinicCode);
+      if (error) {
+        console.error("SYNC ERROR:", error);
+        alert("LỖI ĐỒNG BỘ: Không thể lưu dữ liệu lên đám mây. Bạn hãy kiểm tra lại Supabase (Bảng clinics đã có chưa? RLS đã tắt chưa?). Chi tiết: " + error.message);
+      }
       setTimeout(() => setIsSyncing(false), 500); // UI feedback
     }
   };
