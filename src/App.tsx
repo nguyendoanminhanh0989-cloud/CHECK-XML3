@@ -897,43 +897,47 @@ export default function App() {
                               <tr key={`${groupCode}-${i}`} className="hover:bg-slate-50/80 transition-colors">
                                 <td className="px-6 py-3 font-mono text-slate-500 text-xs">{s.code}</td>
                                 <td className="px-6 py-3 text-slate-800 font-medium text-sm">{s.name}</td>
-                                <td className="px-6 py-3 text-center flex justify-center bg-emerald-50/20 border-l border-emerald-50">
-                                  <label className="relative flex items-center cursor-pointer">
-                                    <input 
-                                      type="checkbox" 
-                                      disabled={clinicCode === 'GUEST'}
-                                      checked={s.allowStaffOverlap} 
-                                      onChange={(e) => {
-                                        const newCat = [...config.serviceCatalog];
-                                        const itemIdx = newCat.findIndex(x => x.code === s.code);
-                                        if(itemIdx > -1) {
-                                          newCat[itemIdx].allowStaffOverlap = e.target.checked;
-                                          updateConfig({...config, serviceCatalog: newCat});
-                                        }
-                                      }}
-                                      className="sr-only peer disabled:cursor-not-allowed"
-                                    />
-                                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
-                                  </label>
+                                <td className="px-6 py-3 text-center bg-emerald-50/20 border-l border-emerald-50">
+                                  <div className="flex justify-center">
+                                    <label className="relative flex items-center cursor-pointer">
+                                      <input 
+                                        type="checkbox" 
+                                        disabled={clinicCode === 'GUEST'}
+                                        checked={s.allowStaffOverlap} 
+                                        onChange={(e) => {
+                                          const newCat = [...config.serviceCatalog];
+                                          const itemIdx = newCat.findIndex(x => x.code === s.code);
+                                          if(itemIdx > -1) {
+                                            newCat[itemIdx].allowStaffOverlap = e.target.checked;
+                                            updateConfig({...config, serviceCatalog: newCat});
+                                          }
+                                        }}
+                                        className="sr-only peer disabled:cursor-not-allowed"
+                                      />
+                                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                                    </label>
+                                  </div>
                                 </td>
-                                <td className="px-6 py-3 text-center flex justify-center bg-amber-50/20 border-l border-amber-50">
-                                  <label className="relative flex items-center cursor-pointer">
-                                    <input 
-                                      type="checkbox" 
-                                      disabled={clinicCode === 'GUEST'}
-                                      checked={!!s.noMachineRequired} 
-                                      onChange={(e) => {
-                                        const newCat = [...config.serviceCatalog];
-                                        const itemIdx = newCat.findIndex(x => x.code === s.code);
-                                        if(itemIdx > -1) {
-                                          newCat[itemIdx].noMachineRequired = e.target.checked;
-                                          updateConfig({...config, serviceCatalog: newCat});
-                                        }
-                                      }}
-                                      className="sr-only peer disabled:cursor-not-allowed"
-                                    />
-                                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
-                                  </label>
+                                <td className="px-6 py-3 text-center bg-amber-50/20 border-l border-amber-50">
+                                  <div className="flex justify-center">
+                                    <label className="relative flex items-center cursor-pointer">
+                                      <input 
+                                        type="checkbox" 
+                                        disabled={clinicCode === 'GUEST'}
+                                        checked={!!s.noMachineRequired} 
+                                        onChange={(e) => {
+                                          const newCat = [...config.serviceCatalog];
+                                          const itemIdx = newCat.findIndex(x => x.code === s.code);
+                                          if(itemIdx > -1) {
+                                            newCat[itemIdx].noMachineRequired = e.target.checked;
+                                            updateConfig({...config, serviceCatalog: newCat});
+                                          }
+                                        }}
+                                        className="sr-only peer disabled:cursor-not-allowed"
+                                      />
+                                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                                    </label>
+                                  </div>
                                 </td>
                               </tr>
                             ))}
@@ -984,24 +988,26 @@ export default function App() {
                           <tr key={i} className="hover:bg-slate-50/80 transition-colors">
                             <td className="px-6 py-3 font-mono text-slate-500 text-xs">{m.code}</td>
                             <td className="px-6 py-3 text-slate-800 font-medium text-sm">{m.name}</td>
-                            <td className="px-6 py-3 text-center flex justify-center bg-emerald-50/20 border-l border-emerald-50">
-                              <label className="relative flex items-center cursor-pointer">
-                                <input 
-                                  type="checkbox" 
-                                  disabled={clinicCode === 'GUEST'}
-                                  checked={m.allowOverlap} 
-                                  onChange={(e) => {
-                                    const newCat = [...config.machineCatalog];
-                                    const itemIdx = newCat.findIndex(x => x.code === m.code);
-                                    if(itemIdx > -1) {
-                                      newCat[itemIdx].allowOverlap = e.target.checked;
-                                      updateConfig({...config, machineCatalog: newCat});
-                                    }
-                                  }}
-                                  className="sr-only peer disabled:cursor-not-allowed"
-                                />
-                                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
-                              </label>
+                            <td className="px-6 py-3 text-center bg-emerald-50/20 border-l border-emerald-50">
+                              <div className="flex justify-center">
+                                <label className="relative flex items-center cursor-pointer">
+                                  <input 
+                                    type="checkbox" 
+                                    disabled={clinicCode === 'GUEST'}
+                                    checked={m.allowOverlap} 
+                                    onChange={(e) => {
+                                      const newCat = [...config.machineCatalog];
+                                      const itemIdx = newCat.findIndex(x => x.code === m.code);
+                                      if(itemIdx > -1) {
+                                        newCat[itemIdx].allowOverlap = e.target.checked;
+                                        updateConfig({...config, machineCatalog: newCat});
+                                      }
+                                    }}
+                                    className="sr-only peer disabled:cursor-not-allowed"
+                                  />
+                                  <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                                </label>
+                              </div>
                             </td>
                           </tr>
                         ))
