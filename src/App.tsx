@@ -45,6 +45,9 @@ export default function App() {
   const [errors, setErrors] = useState<ErrorLog[]>([]);
   const [isValidating, setIsValidating] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchStaff, setSearchStaff] = useState('');
+  const [searchService, setSearchService] = useState('');
+  const [searchMachine, setSearchMachine] = useState('');
   const [showConfig, setShowConfig] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -356,15 +359,32 @@ export default function App() {
     );
   }, [records, searchTerm]);
 
-  const groupedServices = useMemo(() => {
+  const filteredStaffs = useMemo(() => {
+    if (!searchStaff) return config.staffCatalog;
+    const s = searchStaff.toLowerCase();
+    return config.staffCatalog.filter(x => x.cchn.toLowerCase().includes(s) || x.name.toLowerCase().includes(s));
+  }, [config.staffCatalog, searchStaff]);
+
+  const groupedFilteredServices = useMemo(() => {
+    let list = config.serviceCatalog;
+    if (searchService) {
+      const s = searchService.toLowerCase();
+      list = list.filter(x => x.code.toLowerCase().includes(s) || x.name.toLowerCase().includes(s));
+    }
     const map = new Map<string, ServiceCatalog[]>();
-    config.serviceCatalog.forEach(s => {
+    list.forEach(s => {
       const groupCode = s.code.substring(0, 2);
       if (!map.has(groupCode)) map.set(groupCode, []);
       map.get(groupCode)!.push(s);
     });
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [config.serviceCatalog]);
+  }, [config.serviceCatalog, searchService]);
+
+  const filteredMachines = useMemo(() => {
+    if (!searchMachine) return config.machineCatalog;
+    const s = searchMachine.toLowerCase();
+    return config.machineCatalog.filter(x => x.code.toLowerCase().includes(s) || x.name.toLowerCase().includes(s));
+  }, [config.machineCatalog, searchMachine]);
 
   const NavButton = ({ id, icon: Icon, label }: { id: any, icon: any, label: string }) => (
     <button 
@@ -786,10 +806,16 @@ export default function App() {
                   <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Users className="text-emerald-500"/> Danh Mục Nhân Viên (Bảng 2)</h2>
                   <p className="text-sm text-slate-500 mt-2 font-medium">Tải lên file danh sách nhân sự. Sẽ được đồng bộ lên máy chủ Cloud theo mã phòng khám của bạn.</p>
                 </div>
-                <input type="file" ref={staffInputRef} onChange={handleImportStaff} className="hidden" accept=".xlsx, .xls" />
-                <button disabled={clinicCode === 'GUEST'} onClick={() => staffInputRef.current?.click()} className="px-5 py-2.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-xl text-sm transition-all shadow-sm font-bold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                  <UploadCloud size={16}/> Tải Danh Mục
-                </button>
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                    <input type="text" placeholder="Tìm tên hoặc mã NV..." value={searchStaff} onChange={(e) => setSearchStaff(e.target.value)} className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white w-64" />
+                  </div>
+                  <input type="file" ref={staffInputRef} onChange={handleImportStaff} className="hidden" accept=".xlsx, .xls" />
+                  <button disabled={clinicCode === 'GUEST'} onClick={() => staffInputRef.current?.click()} className="px-5 py-2.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-xl text-sm transition-all shadow-sm font-bold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <UploadCloud size={16}/> Tải Danh Mục
+                  </button>
+                </div>
               </div>
               {clinicCode === 'GUEST' && <div className="bg-amber-50 p-3 rounded-lg text-amber-700 text-sm mb-4">Bạn đang dùng chế độ Khách. Tính năng tải lên Danh mục đã bị khóa.</div>}
               <div className="border border-slate-200 rounded-xl overflow-hidden flex-1 shadow-sm">
@@ -802,10 +828,10 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {config.staffCatalog.length === 0 ? (
-                        <tr><td colSpan={2} className="px-6 py-16 text-center text-slate-400 font-medium text-sm">Chưa có dữ liệu. Vui lòng tải file để hiển thị.</td></tr>
+                      {filteredStaffs.length === 0 ? (
+                        <tr><td colSpan={2} className="px-6 py-16 text-center text-slate-400 font-medium text-sm">Chưa có dữ liệu hoặc không tìm thấy.</td></tr>
                       ) : (
-                        config.staffCatalog.map((s, i) => (
+                        filteredStaffs.map((s, i) => (
                           <tr key={i} className="hover:bg-slate-50/80 transition-colors">
                             <td className="px-6 py-3 font-mono font-bold text-emerald-700 text-xs">{s.cchn}</td>
                             <td className="px-6 py-3 text-slate-800 font-medium text-sm">{s.name}</td>
@@ -826,10 +852,16 @@ export default function App() {
                   <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Activity className="text-emerald-500"/> Danh Mục DVKT (Bảng 5)</h2>
                   <p className="text-sm text-slate-500 mt-2 font-medium">Sẽ được đồng bộ lên máy chủ Cloud. Bạn có thể bật tắt Cho Phép Làm Chồng Chéo Giờ ở đây.</p>
                 </div>
-                <input type="file" ref={serviceInputRef} onChange={handleImportService} className="hidden" accept=".xlsx, .xls" />
-                <button disabled={clinicCode === 'GUEST'} onClick={() => serviceInputRef.current?.click()} className="px-5 py-2.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-xl text-sm transition-all shadow-sm font-bold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                  <UploadCloud size={16}/> Tải Bảng 5
-                </button>
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                    <input type="text" placeholder="Tìm tên hoặc mã DV..." value={searchService} onChange={(e) => setSearchService(e.target.value)} className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white w-64" />
+                  </div>
+                  <input type="file" ref={serviceInputRef} onChange={handleImportService} className="hidden" accept=".xlsx, .xls" />
+                  <button disabled={clinicCode === 'GUEST'} onClick={() => serviceInputRef.current?.click()} className="px-5 py-2.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-xl text-sm transition-all shadow-sm font-bold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <UploadCloud size={16}/> Tải Bảng 5
+                  </button>
+                </div>
               </div>
               {clinicCode === 'GUEST' && <div className="bg-amber-50 p-3 rounded-lg text-amber-700 text-sm mb-4">Bạn đang dùng chế độ Khách. Tính năng tải lên Danh mục đã bị khóa.</div>}
               <div className="border border-slate-200 rounded-xl overflow-hidden flex-1 shadow-sm">
@@ -843,10 +875,10 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {groupedServices.length === 0 ? (
-                        <tr><td colSpan={3} className="px-6 py-16 text-center text-slate-400 font-medium text-sm">Chưa có dữ liệu Bảng 5.</td></tr>
+                      {groupedFilteredServices.length === 0 ? (
+                        <tr><td colSpan={3} className="px-6 py-16 text-center text-slate-400 font-medium text-sm">Chưa có dữ liệu hoặc không tìm thấy.</td></tr>
                       ) : (
-                        groupedServices.map(([groupCode, services]) => (
+                        groupedFilteredServices.map(([groupCode, services]) => (
                           <React.Fragment key={groupCode}>
                             <tr className="bg-slate-800 border-y border-slate-900 sticky top-[48px] z-[5]">
                               <td colSpan={3} className="px-6 py-2 text-[11px] font-bold text-white uppercase tracking-wider flex items-center gap-3">
@@ -896,10 +928,16 @@ export default function App() {
                   <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Server className="text-emerald-500"/> Danh Mục Thiết Bị (Bảng 6)</h2>
                   <p className="text-sm text-slate-500 mt-2 font-medium">Bật cấu hình này nếu Thiết bị đó cho phép nhiều bệnh nhân sử dụng cùng lúc.</p>
                 </div>
-                <input type="file" ref={machineInputRef} onChange={handleImportMachine} className="hidden" accept=".xlsx, .xls" />
-                <button disabled={clinicCode === 'GUEST'} onClick={() => machineInputRef.current?.click()} className="px-5 py-2.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-xl text-sm transition-all shadow-sm font-bold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                  <UploadCloud size={16}/> Tải Bảng 6
-                </button>
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                    <input type="text" placeholder="Tìm tên hoặc mã Máy..." value={searchMachine} onChange={(e) => setSearchMachine(e.target.value)} className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white w-64" />
+                  </div>
+                  <input type="file" ref={machineInputRef} onChange={handleImportMachine} className="hidden" accept=".xlsx, .xls" />
+                  <button disabled={clinicCode === 'GUEST'} onClick={() => machineInputRef.current?.click()} className="px-5 py-2.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-xl text-sm transition-all shadow-sm font-bold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <UploadCloud size={16}/> Tải Bảng 6
+                  </button>
+                </div>
               </div>
               {clinicCode === 'GUEST' && <div className="bg-amber-50 p-3 rounded-lg text-amber-700 text-sm mb-4">Bạn đang dùng chế độ Khách. Tính năng tải lên Danh mục đã bị khóa.</div>}
               <div className="border border-slate-200 rounded-xl overflow-hidden flex-1 shadow-sm">
@@ -913,10 +951,10 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {config.machineCatalog.length === 0 ? (
-                        <tr><td colSpan={3} className="px-6 py-16 text-center text-slate-400 font-medium text-sm">Chưa có dữ liệu Bảng 6.</td></tr>
+                      {filteredMachines.length === 0 ? (
+                        <tr><td colSpan={3} className="px-6 py-16 text-center text-slate-400 font-medium text-sm">Chưa có dữ liệu hoặc không tìm thấy.</td></tr>
                       ) : (
-                        config.machineCatalog.map((m, i) => (
+                        filteredMachines.map((m, i) => (
                           <tr key={i} className="hover:bg-slate-50/80 transition-colors">
                             <td className="px-6 py-3 font-mono text-slate-500 text-xs">{m.code}</td>
                             <td className="px-6 py-3 text-slate-800 font-medium text-sm">{m.name}</td>
@@ -928,8 +966,11 @@ export default function App() {
                                   checked={m.allowOverlap} 
                                   onChange={(e) => {
                                     const newCat = [...config.machineCatalog];
-                                    newCat[i].allowOverlap = e.target.checked;
-                                    updateConfig({...config, machineCatalog: newCat});
+                                    const itemIdx = newCat.findIndex(x => x.code === m.code);
+                                    if(itemIdx > -1) {
+                                      newCat[itemIdx].allowOverlap = e.target.checked;
+                                      updateConfig({...config, machineCatalog: newCat});
+                                    }
                                   }}
                                   className="sr-only peer disabled:cursor-not-allowed"
                                 />
