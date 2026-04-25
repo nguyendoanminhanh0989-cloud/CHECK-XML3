@@ -1,0 +1,6 @@
+{
+  "name": "check-xml3-anhit",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
