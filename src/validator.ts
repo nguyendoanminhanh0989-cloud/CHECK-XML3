@@ -102,6 +102,12 @@ function normStaff(s: string): string {
   return s.normalize('NFC').replace(/[\u00A0\u200B\u200C\u200D\uFEFF]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
 }
 
+// Bỏ chức danh y tế (YS., BS., CN., DD., KTV., ĐD., BSCKI., BSCKII., THS., PGS., GS., TS.) và ký tự thừa (::, ..)
+const TITLE_REGEX = /^(YS\.?\s*|BS\.?\s*|BSCKI+\.?\s*|CN\.?\s*|DD\.?\s*|ĐD\.?\s*|KTV\.?\s*|THS\.?\s*|PGS\.?\s*|GS\.?\s*|TS\.?\s*)/i;
+function stripTitle(s: string): string {
+  return s.replace(TITLE_REGEX, '').replace(/[:;.,]+$/g, '').trim();
+}
+
 // Chuẩn hóa cực mạnh: chỉ giữ chữ và số (bỏ /, -, khoảng trắng...)
 function normStaffStrict(s: string): string {
   return s.normalize('NFC').replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF]/g, '').toUpperCase();
@@ -112,13 +118,32 @@ function findStaff(catalog: Staff[] | undefined, value: string): Staff | undefin
   if (!catalog || catalog.length === 0 || !value) return undefined;
   const v = normStaff(value);
   const vStrict = normStaffStrict(value);
-  // Match chính xác trước (chuẩn hóa nhẹ)
+  // Bỏ chức danh rồi so sánh
+  const vClean = normStaff(stripTitle(value));
+  const vCleanStrict = normStaffStrict(stripTitle(value));
+
+  // Match 1: Exact (chuẩn hóa nhẹ)
   const exact = catalog.find(s => normStaff(s.cchn) === v || normStaff(s.name) === v);
   if (exact) return exact;
-  // Fallback: match bỏ hết ký tự đặc biệt (/, -, khoảng trắng...)
-  if (vStrict.length >= 3) {
-    return catalog.find(s => normStaffStrict(s.cchn) === vStrict || normStaffStrict(s.name) === vStrict);
+
+  // Match 2: Bỏ chức danh (YS., BS...) rồi so sánh
+  if (vClean.length >= 2) {
+    const clean = catalog.find(s => normStaff(s.cchn) === vClean || normStaff(s.name) === vClean || normStaff(stripTitle(s.name)) === vClean);
+    if (clean) return clean;
   }
+
+  // Match 3: Bỏ hết ký tự đặc biệt
+  if (vStrict.length >= 3) {
+    const strict = catalog.find(s => normStaffStrict(s.cchn) === vStrict || normStaffStrict(s.name) === vStrict);
+    if (strict) return strict;
+  }
+
+  // Match 4: Bỏ chức danh + bỏ ký tự đặc biệt
+  if (vCleanStrict.length >= 3) {
+    const cleanStrict = catalog.find(s => normStaffStrict(s.name) === vCleanStrict || normStaffStrict(stripTitle(s.name)) === vCleanStrict);
+    if (cleanStrict) return cleanStrict;
+  }
+
   return undefined;
 }
 
