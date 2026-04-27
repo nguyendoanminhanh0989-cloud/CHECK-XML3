@@ -397,6 +397,23 @@ export default function App() {
     }, 400);
   };
 
+  const handleDownloadTemplate = () => {
+    const wb = XLSX.utils.book_new();
+    const data = [{
+      'MA_LK': '12345678',
+      'MA_DICH_VU': '02.03',
+      'TEN_DICH_VU': 'Khám Nội tổng hợp',
+      'NGAY_YL': '202604240734',
+      'NGAY_TH_YL': '202604240735',
+      'NGAY_KQ': '202604240928',
+      'MA_BAC_SI': '000697/QNA-CCHN',
+      'NGUOI_THUC_HIEN': '000697/QNA-CCHN',
+      'MA_MAY': 'SA.3.48225.S382'
+    }];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), "File_Mau_Chuan");
+    XLSX.writeFile(wb, "File_Mau_Import_Doi_Chieu.xlsx");
+  };
+
   const handleExport = () => {
     const wb = XLSX.utils.book_new();
 
@@ -646,6 +663,14 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-3">
+          <button 
+            onClick={handleDownloadTemplate}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-100 border border-slate-200 hover:bg-slate-200 text-slate-700 rounded-xl transition-all text-sm font-bold shadow-sm"
+          >
+            <FileSpreadsheet size={18} />
+            <span>Tải File Mẫu Chuẩn</span>
+          </button>
+          
           <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept=".xlsx, .xls, .csv" multiple />
           <button 
             onClick={() => fileInputRef.current?.click()}
