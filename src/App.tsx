@@ -49,6 +49,8 @@ export default function App() {
   const [searchService, setSearchService] = useState('');
   const [searchMachine, setSearchMachine] = useState('');
   const [showConfig, setShowConfig] = useState(false);
+  const [newStaffCchn, setNewStaffCchn] = useState('');
+  const [newStaffName, setNewStaffName] = useState('');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const staffInputRef = useRef<HTMLInputElement>(null);
@@ -251,10 +253,13 @@ export default function App() {
       if (!s) return '';
       return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[\s_\-\/\\]/g, '');
     };
-    const targetNames = names.map(normalize);
-    for (const key of rowKeys) {
-      if (targetNames.includes(normalize(key))) {
-        return row[key];
+    // Lặp theo thứ tự ưu tiên của names (tên đầu tiên = ưu tiên cao nhất)
+    for (const name of names) {
+      const normName = normalize(name);
+      for (const key of rowKeys) {
+        if (normalize(key) === normName) {
+          return row[key];
+        }
       }
     }
     return '';
@@ -278,12 +283,7 @@ export default function App() {
 
         const mapped: DVKTRecord[] = data.map((row: any, index) => {
           let maLK = String(getCol(row, ['MA_LK', 'MaBN', 'Mã LK', 'Mã BN', 'Họ tên người bệnh', 'Họ và tên người bệnh', 'Số BHYT']) || '').trim().toUpperCase();
-          // Nếu mẫu STG_Sothuthuatphauthuat (VD: DN4484912005362 - 49070) -> Tách lấy số cuối
-          if (maLK.includes('-') && !maLK.includes(' ')) {
-            // Chỉ tách nếu nó giống dạng thẻ BHYT. Còn họ tên có thể có dấu - (hiếm nhưng có thể) 
-            // Thực ra thẻ BHYT ở trên có khoảng trắng: "DN4484912005362 - 49070"
-            // Nên ta cứ giữ logic cũ nhưng cẩn thận hơn một chút:
-          }
+          // Nếu mã chứa dấu '-' và có số (dạng thẻ BHYT: DN4484912005362-49070) -> Tách lấy số cuối
           if (maLK.includes('-') && /\d/.test(maLK)) {
             const parts = maLK.split('-');
             maLK = parts[parts.length - 1].trim();
@@ -296,25 +296,19 @@ export default function App() {
             maDV = tenDV.toUpperCase(); // Fallback ID = Name nếu file STG không có mã DVKT
           }
 
-          // Xử lý yêu cầu định dạng yyyymmddHHmm
-          const convertToCustomDateStr = (val: any) => {
-            const parsed = parseDateString(val);
-            if (!parsed) return null;
-            return parsed;
-          };
-
           return {
             id: `rec-${fileIndex}-${index}-${Date.now()}`,
             MA_LK: maLK,
+            HO_TEN: String(getCol(row, ['HO_TEN', 'TEN_BENH_NHAN', 'Họ tên người bệnh', 'Họ và tên người bệnh', 'HoTen', 'TEN_BN', 'Tên BN', 'Họ tên']) || '').trim(),
             MA_DICH_VU: maDV,
             TEN_DICH_VU: tenDV,
-            NGAY_YL: convertToCustomDateStr(getCol(row, ['NGAYGIO_YL', 'NGAY_YL', 'NGAY_Y_LENH', 'ThoiGianYLenh', 'Ngày Y lệnh', 'Thời gian Y lệnh', 'Thời gian chỉ định', 'Ngày chỉ định'])),
-            NGAY_TH_YL: convertToCustomDateStr(getCol(row, ['NGAYGIO_TH_YL', 'NGAY_TH_YL', 'NGAY_TH', 'NGAY_THUC_HIEN', 'NGAYGIO_TH', 'ThoiGianThucHien', 'Ngày thực hiện', 'Thời gian thực hiện', 'Ngày giờ thủ thuật', 'Ngày thủ thuật'])),
-            NGAY_KQ: convertToCustomDateStr(getCol(row, ['NGAYGIO_KQ', 'NGAY_KQ', 'NGAY_KT', 'NGAY_KET_QUA', 'NGAY_KET_THUC', 'ThoiGianKetQua', 'Ngày kết quả', 'Ngày kết thúc', 'Thời gian kết thúc', 'Ngày giờ kết quả'])),
+            NGAY_YL: parseDateString(getCol(row, ['NGAYGIO_YL', 'NGAY_YL', 'NGAY_Y_LENH', 'ThoiGianYLenh', 'Ngày Y lệnh', 'Thời gian Y lệnh', 'Thời gian chỉ định', 'Ngày chỉ định'])),
+            NGAY_TH_YL: parseDateString(getCol(row, ['NGAYGIO_TH_YL', 'NGAY_TH_YL', 'NGAY_TH', 'NGAY_THUC_HIEN', 'NGAYGIO_TH', 'ThoiGianThucHien', 'Ngày thực hiện', 'Thời gian thực hiện', 'Ngày giờ thủ thuật', 'Ngày thủ thuật'])),
+            NGAY_KQ: parseDateString(getCol(row, ['NGAYGIO_KQ', 'NGAY_KQ', 'NGAY_KT', 'NGAY_KET_QUA', 'NGAY_KET_THUC', 'ThoiGianKetQua', 'Ngày kết quả', 'Ngày kết thúc', 'Thời gian kết thúc', 'Ngày giờ kết quả'])),
             MA_BAC_SI: String(getCol(row, ['MA_BAC_SI', 'NguoiChiDinh', 'Bác sĩ', 'Mã Bác Sĩ', 'Bác sĩ thủ thuật']) || '').trim().toUpperCase(),
             NGUOI_THUC_HIEN: String(getCol(row, ['NGUOI_THUC_HIEN', 'NguoiThucHien', 'Người thực hiện', 'MACCHN', 'CCHN', 'Bác sĩ thủ thuật', 'Bác sĩ/Nhân viên thực hiện', 'Bác sĩ nhân viên thực hiện']) || '').trim().toUpperCase(),
-            MA_MAY: String(getCol(row, ['MA_MAY', 'MaMay', 'Mã máy']) || '').trim().toUpperCase(),
-            LOAI_BIEU: row['MA_THUOC'] ? 'THUOC' : 'CLS',
+            MA_MAY: String(getCol(row, ['MA_MAY_3176', 'MA_MAY', 'MaMay', 'Mã máy']) || '').trim().toUpperCase(),
+            LOAI_BIEU: row['MA_THUOC'] ? 'THUOC' as const : 'CLS' as const,
             originalRow: row
           };
         });
@@ -340,11 +334,18 @@ export default function App() {
       const bstr = evt.target?.result;
       const wb = XLSX.read(bstr, { type: 'binary' });
       const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-      const catalog = data.map((r: any) => ({
+      const newItems = data.map((r: any) => ({
         cchn: String(getCol(r, ['MACCHN', 'CCHN', 'MaNV', 'Mã NV', 'MA_NV', 'MA_BHXH']) || '').trim().toUpperCase(),
         name: String(getCol(r, ['HO_TEN', 'TEN_NV', 'TenNV', 'Tên NV', 'HoTen', 'Họ tên']) || '').trim()
       })).filter(x => x.cchn && x.cchn !== 'UNDEFINED' && x.cchn !== '');
-      updateConfig({ ...config, staffCatalog: catalog });
+      // MERGE: giữ danh mục cũ, thêm mới
+      const merged = [...config.staffCatalog];
+      newItems.forEach(item => {
+        const idx = merged.findIndex(x => x.cchn === item.cchn);
+        if (idx > -1) merged[idx] = { ...merged[idx], ...item };
+        else merged.push(item);
+      });
+      updateConfig({ ...config, staffCatalog: merged });
     };
     reader.readAsBinaryString(file);
     if (staffInputRef.current) staffInputRef.current.value = '';
@@ -358,12 +359,19 @@ export default function App() {
       const bstr = evt.target?.result;
       const wb = XLSX.read(bstr, { type: 'binary' });
       const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-      const catalog = data.map((r: any) => ({
-        code: String(getCol(r, ['MA_MAY', 'Mã máy', 'MaMay', 'KY_HIEU']) || '').trim().toUpperCase(),
-        name: String(getCol(r, ['TEN_TB', 'TEN_MAY', 'Tên máy', 'TenMay']) || '').trim(),
+      const newItems = data.map((r: any) => ({
+        code: String(getCol(r, ['MA_MAY', 'MaMay', 'Mã máy']) || '').trim().toUpperCase(),
+        name: String(getCol(r, ['TEN_TB', 'TEN_MAY', 'Tên máy', 'TenMay', 'KY_HIEU', 'Ký hiệu']) || '').trim(),
         allowOverlap: Boolean(getCol(r, ['CHO_PHEP_TRUNG', 'ChoPhepTrung', 'AllowOverlap']))
       })).filter(x => x.code && x.code !== 'UNDEFINED' && x.code !== '');
-      updateConfig({ ...config, machineCatalog: catalog });
+      // MERGE: giữ danh mục cũ, thêm mới (ghi đè nếu trùng code)
+      const merged = [...config.machineCatalog];
+      newItems.forEach(item => {
+        const idx = merged.findIndex(x => x.code === item.code);
+        if (idx > -1) merged[idx] = { ...merged[idx], ...item };
+        else merged.push(item);
+      });
+      updateConfig({ ...config, machineCatalog: merged });
     };
     reader.readAsBinaryString(file);
     if (machineInputRef.current) machineInputRef.current.value = '';
@@ -377,13 +385,20 @@ export default function App() {
       const bstr = evt.target?.result;
       const wb = XLSX.read(bstr, { type: 'binary' });
       const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-      const catalog = data.map((r: any) => ({
+      const newItems = data.map((r: any) => ({
         code: String(getCol(r, ['MA_DICH_VU', 'MA_DVKT', 'Mã DV', 'MaDVKT', 'MA_TUONG_DUONG']) || '').trim().toUpperCase(),
         name: String(getCol(r, ['TEN_DICH_VU', 'TEN_DVKT', 'Tên DVKT', 'TEN_DVKT_PHEDUYET', 'TEN_DVKT_GIA']) || '').trim(),
         allowStaffOverlap: Boolean(getCol(r, ['CHO_PHEP_NV_TRUNG', 'ChoPhepTrung', 'AllowStaffOverlap'])),
         noMachineRequired: Boolean(getCol(r, ['KHONG_CAN_MAY', 'KhongCanMay', 'NoMachineRequired']))
       })).filter(x => x.code && x.code !== 'UNDEFINED' && x.code !== '');
-      updateConfig({ ...config, serviceCatalog: catalog });
+      // MERGE: giữ danh mục cũ, thêm mới (ghi đè nếu trùng code)
+      const merged = [...config.serviceCatalog];
+      newItems.forEach(item => {
+        const idx = merged.findIndex(x => x.code === item.code);
+        if (idx > -1) merged[idx] = { ...merged[idx], ...item };
+        else merged.push(item);
+      });
+      updateConfig({ ...config, serviceCatalog: merged });
     };
     reader.readAsBinaryString(file);
     if (serviceInputRef.current) serviceInputRef.current.value = '';
@@ -423,12 +438,13 @@ export default function App() {
         const rec = records.find(r => r.id === e.recordId);
         return {
           'Mã LK': e.MA_LK,
+          'Tên BN': rec?.HO_TEN || '',
           'Mã DV': e.MA_DICH_VU,
           'Tên Dịch Vụ': rec?.TEN_DICH_VU || '',
           'Thời Gian Y Lệnh': rec?.NGAY_YL ? formatDate(rec.NGAY_YL) : '',
           'Thời Gian Thực Hiện': rec?.NGAY_TH_YL ? formatDate(rec.NGAY_TH_YL) : '',
           'Thời Gian Kết Quả': rec?.NGAY_KQ ? formatDate(rec.NGAY_KQ) : '',
-          'Người Y Lệnh': rec?.MA_BAC_SI || '',
+          'BS Y Lệnh': rec?.MA_BAC_SI || '',
           'Người Thực Hiện': rec?.NGUOI_THUC_HIEN || '',
           'Mã Máy': rec?.MA_MAY || '',
           'Nội Dung Lỗi': e.NoiDung,
@@ -441,20 +457,32 @@ export default function App() {
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildSheetData(() => true)), "1. Tổng Hợp Lỗi");
 
     // Sheet 2: Trùng mã máy
-    const errMay = buildSheetData(e => e.NoiDung.toLowerCase().includes('máy'));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(errMay), "2. Lỗi Trùng Mã Máy");
+    const errMay = buildSheetData(e => e.NoiDung.includes('TRÙNG MÁY'));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(errMay), "2. Trùng Máy");
 
     // Sheet 3: Trùng y lệnh
-    const errYL = buildSheetData(e => e.NoiDung.toLowerCase().includes('y lệnh'));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(errYL), "3. Lỗi Trùng Y Lệnh");
+    const errYL = buildSheetData(e => e.NoiDung.includes('TRÙNG Y LỆNH'));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(errYL), "3. Trùng Y Lệnh");
 
-    // Sheet 4: Trùng thực hiện
-    const errTH = buildSheetData(e => e.NoiDung.toLowerCase().includes('thực hiện') || e.NoiDung.toLowerCase().includes('chồng chéo'));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(errTH), "4. Lỗi Trùng Thực Hiện");
+    // Sheet 4: Chồng chéo NV (TH/KQ/CA)
+    const errTH = buildSheetData(e => e.NoiDung.includes('TRÙNG GIỜ TH') || e.NoiDung.includes('CHỒNG CHÉO CA'));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(errTH), "4. Chồng Chéo NV");
 
     // Sheet 5: Trùng kết quả
-    const errKQ = buildSheetData(e => e.NoiDung.toLowerCase().includes('kết quả'));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(errKQ), "5. Lỗi Trùng Kết Quả");
+    const errKQ = buildSheetData(e => e.NoiDung.includes('TRÙNG GIỜ KQ'));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(errKQ), "5. Trùng Kết Quả");
+
+    // Sheet 6: Lỗi CĐHA
+    const errCDHA = buildSheetData(e => e.NoiDung.includes('CĐHA'));
+    if (errCDHA.length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(errCDHA), "6. Lỗi CĐHA");
+
+    // Sheet 7: Thiếu nhân viên
+    const errNV = buildSheetData(e => e.NoiDung.includes('THIẾU NV'));
+    if (errNV.length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(errNV), "7. Thiếu Nhân Viên");
+
+    // Sheet 8: Chồng chéo BN
+    const errBN = buildSheetData(e => e.NoiDung.includes('CHỒNG CHÉO BN'));
+    if (errBN.length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(errBN), "8. Chồng Chéo BN");
 
     XLSX.writeFile(wb, `Bao_Cao_Doi_Chieu_${new Date().getTime()}.xlsx`);
   };
@@ -463,7 +491,12 @@ export default function App() {
     if (!searchTerm) return records;
     const s = searchTerm.toLowerCase();
     return records.filter(r => 
-      r.MA_LK.toLowerCase().includes(s) || r.MA_DICH_VU.toLowerCase().includes(s) || r.TEN_DICH_VU.toLowerCase().includes(s)
+      r.MA_LK.toLowerCase().includes(s) || 
+      r.HO_TEN.toLowerCase().includes(s) || 
+      r.MA_DICH_VU.toLowerCase().includes(s) || 
+      r.TEN_DICH_VU.toLowerCase().includes(s) ||
+      r.NGUOI_THUC_HIEN.toLowerCase().includes(s) ||
+      r.MA_BAC_SI.toLowerCase().includes(s)
     );
   }, [records, searchTerm]);
 
@@ -833,12 +866,13 @@ export default function App() {
                   <table className="w-full text-left border-collapse table-fixed">
                     <thead className="sticky top-0 bg-slate-50/95 backdrop-blur z-10 border-b border-emerald-100 shadow-sm">
                       <tr>
-                        <th className="px-3 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider w-[14%]">Mã LK</th>
-                        <th className="px-3 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider w-[18%]">Dịch Vụ</th>
-                        <th className="px-2 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider w-[8%] bg-slate-100/30 text-center">Y Lệnh</th>
-                        <th className="px-2 py-3 text-[10px] font-bold text-emerald-600 uppercase tracking-wider w-[8%] bg-emerald-50/50 border-x border-emerald-100/50 text-center">Thực Hiện</th>
-                        <th className="px-2 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider w-[8%] bg-slate-100/30 text-center">Kết Quả</th>
-                        <th className="px-3 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider w-[12%]">Nhân Sự</th>
+                        <th className="px-3 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider w-[12%]">Bệnh Nhân</th>
+                        <th className="px-3 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider w-[16%]">Dịch Vụ</th>
+                        <th className="px-2 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider w-[7%] bg-slate-100/30 text-center">Y Lệnh</th>
+                        <th className="px-2 py-3 text-[10px] font-bold text-emerald-600 uppercase tracking-wider w-[7%] bg-emerald-50/50 border-x border-emerald-100/50 text-center">Thực Hiện</th>
+                        <th className="px-2 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider w-[7%] bg-slate-100/30 text-center">Kết Quả</th>
+                        <th className="px-3 py-3 text-[10px] font-bold text-blue-500 uppercase tracking-wider w-[9%]">BS Y Lệnh</th>
+                        <th className="px-3 py-3 text-[10px] font-bold text-emerald-600 uppercase tracking-wider w-[9%]">Người TH</th>
                         <th className="px-3 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider w-[12%]">Thiết Bị</th>
                         <th className="px-3 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider w-[20%]">Lỗi / Cảnh Báo</th>
                       </tr>
@@ -846,7 +880,7 @@ export default function App() {
                     <tbody className="divide-y divide-slate-100">
                       {filteredRecords.length === 0 ? (
                         <tr>
-                          <td colSpan={8} className="px-6 py-28 text-center">
+                          <td colSpan={9} className="px-6 py-28 text-center">
                             <div className="flex flex-col items-center gap-4 text-slate-400">
                               <div className="bg-slate-50 p-6 rounded-full border border-slate-100">
                                 <FileSpreadsheet size={48} className="text-emerald-300" />
@@ -864,7 +898,7 @@ export default function App() {
                           return (
                             <tr key={rec.id} className={cn("hover:bg-slate-50/60 transition-colors", isHeavy ? "bg-red-50/30" : isWarning ? "bg-amber-50/20" : "")}>
                               <td className="px-3 py-3 align-top">
-                                <div className="font-mono text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1.5 rounded-md border border-emerald-100/50 break-all leading-relaxed shadow-sm">{rec.MA_LK}</div>
+                                <div className="font-mono text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1.5 rounded-md border border-emerald-100/50 break-all leading-relaxed shadow-sm">{rec.HO_TEN || rec.MA_LK || '—'}</div>
                               </td>
                               <td className="px-3 py-3 align-top">
                                 <div className="text-[12px] font-semibold text-slate-800 leading-snug mb-1.5 line-clamp-3" title={rec.TEN_DICH_VU}>{rec.TEN_DICH_VU}</div>
@@ -876,13 +910,39 @@ export default function App() {
                               <td className="px-2 py-3 align-top font-mono text-[10px] text-slate-600 text-center">{formatDate(rec.NGAY_KQ) || '—'}</td>
                               
                               <td className="px-3 py-3 align-top">
-                                <div className="text-[11px] font-medium text-slate-800 mb-1.5 flex flex-col"><span className="text-[9px] font-bold text-emerald-600 w-fit bg-emerald-50 px-1 rounded mb-0.5">TH:</span><span className="break-all">{rec.NGUOI_THUC_HIEN || '—'}</span></div>
-                                <div className="text-[11px] font-medium text-slate-800 flex flex-col"><span className="text-[9px] font-bold text-blue-500 w-fit bg-blue-50 px-1 rounded mb-0.5">YL:</span><span className="break-all">{rec.MA_BAC_SI || '—'}</span></div>
+                                {(() => {
+                                  const norm = (s: string) => s.normalize('NFC').replace(/[\u00A0\u200B\u200C\u200D\uFEFF]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
+                                  const normS = (s: string) => s.normalize('NFC').replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF]/g, '').toUpperCase();
+                                  const v = rec.MA_BAC_SI ? norm(rec.MA_BAC_SI) : '';
+                                  const vS = rec.MA_BAC_SI ? normS(rec.MA_BAC_SI) : '';
+                                  const staff = v ? (config.staffCatalog.find(s => norm(s.cchn) === v || norm(s.name) === v) || (vS.length >= 3 ? config.staffCatalog.find(s => normS(s.cchn) === vS || normS(s.name) === vS) : undefined)) : undefined;
+                                  const label = staff ? (norm(staff.cchn) === v || normS(staff.cchn) === vS ? staff.name : staff.cchn) : '';
+                                  return <>
+                                    <div className="text-[10px] font-mono font-medium text-blue-700 break-all">{rec.MA_BAC_SI || '—'}</div>
+                                    {label && <div className="text-[9px] text-blue-500 mt-0.5 font-medium">{label}</div>}
+                                  </>;
+                                })()}
                               </td>
                               <td className="px-3 py-3 align-top">
                                 {(() => {
-                                  const svc = config.serviceCatalog.find(s => s.code === rec.MA_DICH_VU);
-                                  const isNoMachine = !!svc?.noMachineRequired;
+                                  const norm = (s: string) => s.normalize('NFC').replace(/[\u00A0\u200B\u200C\u200D\uFEFF]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
+                                  const normS = (s: string) => s.normalize('NFC').replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF]/g, '').toUpperCase();
+                                  const v = rec.NGUOI_THUC_HIEN ? norm(rec.NGUOI_THUC_HIEN) : '';
+                                  const vS = rec.NGUOI_THUC_HIEN ? normS(rec.NGUOI_THUC_HIEN) : '';
+                                  const staff = v ? (config.staffCatalog.find(s => norm(s.cchn) === v || norm(s.name) === v) || (vS.length >= 3 ? config.staffCatalog.find(s => normS(s.cchn) === vS || normS(s.name) === vS) : undefined)) : undefined;
+                                  const label = staff ? (norm(staff.cchn) === v || normS(staff.cchn) === vS ? staff.name : staff.cchn) : '';
+                                  return <>
+                                    <div className="text-[10px] font-mono font-medium text-emerald-700 break-all">{rec.NGUOI_THUC_HIEN || '—'}</div>
+                                    {label && <div className="text-[9px] text-emerald-500 mt-0.5 font-medium">{label}</div>}
+                                  </>;
+                                })()}
+                              </td>
+                              <td className="px-3 py-3 align-top">
+                                {(() => {
+                                  const normC = (c: string) => c.replace(/[.\-\/\s]/g, '').toUpperCase();
+                                  const svc = config.serviceCatalog.find(s => normC(s.code) === normC(rec.MA_DICH_VU));
+                                  const isLab = rec.MA_DICH_VU.startsWith('22') || rec.MA_DICH_VU.startsWith('23') || rec.MA_DICH_VU.startsWith('24');
+                                  const isNoMachine = isLab || !!svc?.noMachineRequired;
                                   
                                   if (rec.MA_MAY) {
                                     return <div className="text-[10px] font-mono font-bold px-1.5 py-1 rounded border break-all text-slate-600 bg-slate-100/80 border-slate-200">{rec.MA_MAY}</div>;
@@ -937,7 +997,30 @@ export default function App() {
                   <button disabled={clinicCode === 'GUEST'} onClick={() => staffInputRef.current?.click()} className="px-5 py-2.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-xl text-sm transition-all shadow-sm font-bold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                     <UploadCloud size={16}/> Tải Danh Mục
                   </button>
+                  {config.staffCatalog.length > 0 && (
+                    <button disabled={clinicCode === 'GUEST'} onClick={() => { if(confirm('Xóa TẤT CẢ danh mục Nhân Viên?')) updateConfig({...config, staffCatalog: []}); }} className="px-4 py-2.5 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-xl text-sm transition-all shadow-sm font-bold flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
+                      <Trash2 size={14}/> Xóa All
+                    </button>
+                  )}
                 </div>
+              </div>
+              {/* Form thêm NV lẻ */}
+              <div className="flex items-center gap-2 mb-4">
+                <input type="text" placeholder="Mã CCHN..." value={newStaffCchn} onChange={e => setNewStaffCchn(e.target.value)} className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white w-48 font-mono" />
+                <input type="text" placeholder="Họ tên nhân viên..." value={newStaffName} onChange={e => setNewStaffName(e.target.value)} className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white flex-1" />
+                <button disabled={clinicCode === 'GUEST' || !newStaffCchn.trim()} onClick={() => {
+                  const cchn = newStaffCchn.trim().toUpperCase();
+                  const name = newStaffName.trim();
+                  if (!cchn) return;
+                  const merged = [...config.staffCatalog];
+                  const idx = merged.findIndex(x => x.cchn === cchn);
+                  if (idx > -1) merged[idx] = { cchn, name };
+                  else merged.push({ cchn, name });
+                  updateConfig({...config, staffCatalog: merged});
+                  setNewStaffCchn(''); setNewStaffName('');
+                }} className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5">
+                  + Thêm NV
+                </button>
               </div>
               {clinicCode === 'GUEST' && <div className="bg-amber-50 p-3 rounded-lg text-amber-700 text-sm mb-4">Bạn đang dùng chế độ Khách. Tính năng tải lên Danh mục đã bị khóa.</div>}
               <div className="border border-slate-200 rounded-xl overflow-hidden flex-1 shadow-sm">
@@ -947,16 +1030,25 @@ export default function App() {
                       <tr>
                         <th className="px-6 py-4 font-bold text-slate-500 text-xs w-64 uppercase tracking-wider">Mã NV / CCHN</th>
                         <th className="px-6 py-4 font-bold text-slate-500 text-xs uppercase tracking-wider">Họ và Tên Nhân Sự</th>
+                        <th className="px-3 py-4 font-bold text-red-400 text-xs text-center w-16 uppercase tracking-wider">Xóa</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {filteredStaffs.length === 0 ? (
-                        <tr><td colSpan={2} className="px-6 py-16 text-center text-slate-400 font-medium text-sm">Chưa có dữ liệu hoặc không tìm thấy.</td></tr>
+                        <tr><td colSpan={3} className="px-6 py-16 text-center text-slate-400 font-medium text-sm">Chưa có dữ liệu hoặc không tìm thấy.</td></tr>
                       ) : (
                         filteredStaffs.map((s, i) => (
                           <tr key={i} className="hover:bg-slate-50/80 transition-colors">
                             <td className="px-6 py-3 font-mono font-bold text-emerald-700 text-xs">{s.cchn}</td>
                             <td className="px-6 py-3 text-slate-800 font-medium text-sm">{s.name}</td>
+                            <td className="px-3 py-3 text-center">
+                              <button disabled={clinicCode === 'GUEST'} onClick={() => {
+                                const newCat = config.staffCatalog.filter(x => x.cchn !== s.cchn);
+                                updateConfig({...config, staffCatalog: newCat});
+                              }} className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-lg transition-colors disabled:opacity-30">
+                                <Trash2 size={14}/>
+                              </button>
+                            </td>
                           </tr>
                         ))
                       )}
@@ -983,6 +1075,11 @@ export default function App() {
                   <button disabled={clinicCode === 'GUEST'} onClick={() => serviceInputRef.current?.click()} className="px-5 py-2.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-xl text-sm transition-all shadow-sm font-bold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                     <UploadCloud size={16}/> Tải Bảng 5
                   </button>
+                  {config.serviceCatalog.length > 0 && (
+                    <button disabled={clinicCode === 'GUEST'} onClick={() => { if(confirm('Xóa TẤT CẢ danh mục DVKT?')) updateConfig({...config, serviceCatalog: []}); }} className="px-4 py-2.5 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-xl text-sm transition-all shadow-sm font-bold flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
+                      <Trash2 size={14}/> Xóa All
+                    </button>
+                  )}
                 </div>
               </div>
               {clinicCode === 'GUEST' && <div className="bg-amber-50 p-3 rounded-lg text-amber-700 text-sm mb-4">Bạn đang dùng chế độ Khách. Tính năng tải lên Danh mục đã bị khóa.</div>}
@@ -993,8 +1090,9 @@ export default function App() {
                       <tr>
                         <th className="px-6 py-4 font-bold text-slate-500 text-xs w-48 uppercase tracking-wider">Mã Dịch Vụ</th>
                         <th className="px-6 py-4 font-bold text-slate-500 text-xs uppercase tracking-wider">Tên Dịch Vụ</th>
-                        <th className="px-6 py-4 font-bold text-emerald-600 text-xs text-center w-64 uppercase tracking-wider bg-emerald-50/50">Cho Phép NV Làm Chồng Chéo Giờ</th>
-                        <th className="px-6 py-4 font-bold text-amber-600 text-xs text-center w-48 uppercase tracking-wider bg-amber-50/50">Không Cần Máy<br/><span className="text-[10px] font-medium">(VD: Khám bệnh)</span></th>
+                        <th className="px-6 py-4 font-bold text-emerald-600 text-xs text-center w-48 uppercase tracking-wider bg-emerald-50/50">Cho Phép Chồng Giờ</th>
+                        <th className="px-6 py-4 font-bold text-amber-600 text-xs text-center w-40 uppercase tracking-wider bg-amber-50/50">Không Cần Máy</th>
+                        <th className="px-3 py-4 font-bold text-red-400 text-xs text-center w-16 uppercase tracking-wider">Xóa</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -1055,6 +1153,14 @@ export default function App() {
                                     </label>
                                   </div>
                                 </td>
+                                <td className="px-3 py-3 text-center">
+                                  <button disabled={clinicCode === 'GUEST'} onClick={() => {
+                                    const newCat = config.serviceCatalog.filter(x => x.code !== s.code);
+                                    updateConfig({...config, serviceCatalog: newCat});
+                                  }} className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-lg transition-colors disabled:opacity-30">
+                                    <Trash2 size={14}/>
+                                  </button>
+                                </td>
                               </tr>
                             ))}
                           </React.Fragment>
@@ -1083,6 +1189,11 @@ export default function App() {
                   <button disabled={clinicCode === 'GUEST'} onClick={() => machineInputRef.current?.click()} className="px-5 py-2.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-xl text-sm transition-all shadow-sm font-bold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                     <UploadCloud size={16}/> Tải Bảng 6
                   </button>
+                  {config.machineCatalog.length > 0 && (
+                    <button disabled={clinicCode === 'GUEST'} onClick={() => { if(confirm('Xóa TẤT CẢ danh mục Thiết bị?')) updateConfig({...config, machineCatalog: []}); }} className="px-4 py-2.5 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-xl text-sm transition-all shadow-sm font-bold flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
+                      <Trash2 size={14}/> Xóa All
+                    </button>
+                  )}
                 </div>
               </div>
               {clinicCode === 'GUEST' && <div className="bg-amber-50 p-3 rounded-lg text-amber-700 text-sm mb-4">Bạn đang dùng chế độ Khách. Tính năng tải lên Danh mục đã bị khóa.</div>}
@@ -1093,12 +1204,13 @@ export default function App() {
                       <tr>
                         <th className="px-6 py-4 font-bold text-slate-500 text-xs w-48 uppercase tracking-wider">Mã Thiết Bị</th>
                         <th className="px-6 py-4 font-bold text-slate-500 text-xs uppercase tracking-wider">Tên Thiết Bị / Máy Móc</th>
-                        <th className="px-6 py-4 font-bold text-emerald-600 text-xs text-center w-64 uppercase tracking-wider bg-emerald-50/50">Cho Phép Nhiều BN Chồng Chéo Giờ</th>
+                        <th className="px-6 py-4 font-bold text-emerald-600 text-xs text-center w-48 uppercase tracking-wider bg-emerald-50/50">Cho Phép Chồng Giờ</th>
+                        <th className="px-3 py-4 font-bold text-red-400 text-xs text-center w-16 uppercase tracking-wider">Xóa</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {filteredMachines.length === 0 ? (
-                        <tr><td colSpan={3} className="px-6 py-16 text-center text-slate-400 font-medium text-sm">Chưa có dữ liệu hoặc không tìm thấy.</td></tr>
+                        <tr><td colSpan={4} className="px-6 py-16 text-center text-slate-400 font-medium text-sm">Chưa có dữ liệu hoặc không tìm thấy.</td></tr>
                       ) : (
                         filteredMachines.map((m, i) => (
                           <tr key={i} className="hover:bg-slate-50/80 transition-colors">
@@ -1124,6 +1236,14 @@ export default function App() {
                                   <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
                                 </label>
                               </div>
+                            </td>
+                            <td className="px-3 py-3 text-center">
+                              <button disabled={clinicCode === 'GUEST'} onClick={() => {
+                                const newCat = config.machineCatalog.filter(x => x.code !== m.code);
+                                updateConfig({...config, machineCatalog: newCat});
+                              }} className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-lg transition-colors disabled:opacity-30">
+                                <Trash2 size={14}/>
+                              </button>
                             </td>
                           </tr>
                         ))

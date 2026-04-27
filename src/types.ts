@@ -1,6 +1,7 @@
 export interface DVKTRecord {
   id: string;
   MA_LK: string;
+  HO_TEN: string;
   MA_DICH_VU: string;
   TEN_DICH_VU: string;
   NGAY_YL: Date | null;
