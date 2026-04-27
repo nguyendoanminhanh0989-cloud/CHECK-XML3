@@ -249,7 +249,7 @@ export default function App() {
     const rowKeys = Object.keys(row);
     const normalize = (s: string) => {
       if (!s) return '';
-      return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[\s_\-]/g, '');
+      return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[\s_\-\/\\]/g, '');
     };
     const targetNames = names.map(normalize);
     for (const key of rowKeys) {
@@ -261,7 +261,7 @@ export default function App() {
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
+    const files = Array.from(e.target.files || []) as File[];
     if (files.length === 0) return;
 
     let allMapped: DVKTRecord[] = [];
@@ -277,16 +277,42 @@ export default function App() {
         const data = XLSX.utils.sheet_to_json(ws);
 
         const mapped: DVKTRecord[] = data.map((row: any, index) => {
+          let maLK = String(getCol(row, ['MA_LK', 'MaBN', 'Mã LK', 'Mã BN', 'Họ tên người bệnh', 'Họ và tên người bệnh', 'Số BHYT']) || '').trim().toUpperCase();
+          // Nếu mẫu STG_Sothuthuatphauthuat (VD: DN4484912005362 - 49070) -> Tách lấy số cuối
+          if (maLK.includes('-') && !maLK.includes(' ')) {
+            // Chỉ tách nếu nó giống dạng thẻ BHYT. Còn họ tên có thể có dấu - (hiếm nhưng có thể) 
+            // Thực ra thẻ BHYT ở trên có khoảng trắng: "DN4484912005362 - 49070"
+            // Nên ta cứ giữ logic cũ nhưng cẩn thận hơn một chút:
+          }
+          if (maLK.includes('-') && /\d/.test(maLK)) {
+            const parts = maLK.split('-');
+            maLK = parts[parts.length - 1].trim();
+          }
+
+          let maDV = String(getCol(row, ['MA_DICH_VU', 'MA_THUOC', 'MaDVKT', 'Mã DVKT']) || '').trim().toUpperCase();
+          const tenDV = String(getCol(row, ['TEN_DICH_VU', 'TEN_THUOC', 'TenDVKT', 'Tên DVKT', 'Yêu cầu', 'Phương pháp thủ thuật']) || '').trim();
+          
+          if (!maDV && tenDV) {
+            maDV = tenDV.toUpperCase(); // Fallback ID = Name nếu file STG không có mã DVKT
+          }
+
+          // Xử lý yêu cầu định dạng yyyymmddHHmm
+          const convertToCustomDateStr = (val: any) => {
+            const parsed = parseDateString(val);
+            if (!parsed) return null;
+            return parsed;
+          };
+
           return {
             id: `rec-${fileIndex}-${index}-${Date.now()}`,
-            MA_LK: String(getCol(row, ['MA_LK', 'MaBN', 'Mã LK', 'Mã BN']) || '').trim().toUpperCase(),
-            MA_DICH_VU: String(getCol(row, ['MA_DICH_VU', 'MA_THUOC', 'MaDVKT', 'Mã DVKT']) || '').trim().toUpperCase(),
-            TEN_DICH_VU: String(getCol(row, ['TEN_DICH_VU', 'TEN_THUOC', 'TenDVKT', 'Tên DVKT']) || '').trim(),
-            NGAY_YL: parseDateString(getCol(row, ['NGAYGIO_YL', 'NGAY_YL', 'NGAY_Y_LENH', 'ThoiGianYLenh', 'Ngày Y lệnh', 'Thời gian Y lệnh', 'Thời gian chỉ định'])),
-            NGAY_TH_YL: parseDateString(getCol(row, ['NGAYGIO_TH_YL', 'NGAY_TH_YL', 'NGAY_TH', 'NGAY_THUC_HIEN', 'NGAYGIO_TH', 'ThoiGianThucHien', 'Ngày thực hiện', 'Thời gian thực hiện'])),
-            NGAY_KQ: parseDateString(getCol(row, ['NGAYGIO_KQ', 'NGAY_KQ', 'NGAY_KT', 'NGAY_KET_QUA', 'NGAY_KET_THUC', 'ThoiGianKetQua', 'Ngày kết quả', 'Ngày kết thúc', 'Thời gian kết thúc'])),
-            MA_BAC_SI: String(getCol(row, ['MA_BAC_SI', 'NguoiChiDinh', 'Bác sĩ', 'Mã Bác Sĩ']) || '').trim().toUpperCase(),
-            NGUOI_THUC_HIEN: String(getCol(row, ['NGUOI_THUC_HIEN', 'NguoiThucHien', 'Người thực hiện', 'MACCHN', 'CCHN']) || '').trim().toUpperCase(),
+            MA_LK: maLK,
+            MA_DICH_VU: maDV,
+            TEN_DICH_VU: tenDV,
+            NGAY_YL: convertToCustomDateStr(getCol(row, ['NGAYGIO_YL', 'NGAY_YL', 'NGAY_Y_LENH', 'ThoiGianYLenh', 'Ngày Y lệnh', 'Thời gian Y lệnh', 'Thời gian chỉ định', 'Ngày chỉ định'])),
+            NGAY_TH_YL: convertToCustomDateStr(getCol(row, ['NGAYGIO_TH_YL', 'NGAY_TH_YL', 'NGAY_TH', 'NGAY_THUC_HIEN', 'NGAYGIO_TH', 'ThoiGianThucHien', 'Ngày thực hiện', 'Thời gian thực hiện', 'Ngày giờ thủ thuật', 'Ngày thủ thuật'])),
+            NGAY_KQ: convertToCustomDateStr(getCol(row, ['NGAYGIO_KQ', 'NGAY_KQ', 'NGAY_KT', 'NGAY_KET_QUA', 'NGAY_KET_THUC', 'ThoiGianKetQua', 'Ngày kết quả', 'Ngày kết thúc', 'Thời gian kết thúc', 'Ngày giờ kết quả'])),
+            MA_BAC_SI: String(getCol(row, ['MA_BAC_SI', 'NguoiChiDinh', 'Bác sĩ', 'Mã Bác Sĩ', 'Bác sĩ thủ thuật']) || '').trim().toUpperCase(),
+            NGUOI_THUC_HIEN: String(getCol(row, ['NGUOI_THUC_HIEN', 'NguoiThucHien', 'Người thực hiện', 'MACCHN', 'CCHN', 'Bác sĩ thủ thuật', 'Bác sĩ/Nhân viên thực hiện', 'Bác sĩ nhân viên thực hiện']) || '').trim().toUpperCase(),
             MA_MAY: String(getCol(row, ['MA_MAY', 'MaMay', 'Mã máy']) || '').trim().toUpperCase(),
             LOAI_BIEU: row['MA_THUOC'] ? 'THUOC' : 'CLS',
             originalRow: row
