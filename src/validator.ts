@@ -314,30 +314,34 @@ export function validateRecords(records: DVKTRecord[], config: ValidationConfig)
           }
         }
 
-        // 2c. Chồng chéo thời gian
+        // 2c. Chồng chéo thời gian (cùng NV, khác BN, khác loại DV)
+        // Cho phép chồng nếu cùng loại DV (cùng mã hoặc cùng nhóm 2 ký tự đầu) → dịch vụ nhóm YHCT
         if (config.checkStaffOverlap && r1.NGAY_TH_YL && r2.NGAY_TH_YL && r1.NGAY_KQ && r2.NGAY_KQ) {
-          if (!eitherAllowed) {
-            // Bỏ qua exact match (đã bắt ở 2a/2b) để tránh double error
-            if (!checkExactMatch(r1.NGAY_TH_YL, r2.NGAY_TH_YL) && !checkExactMatch(r1.NGAY_KQ, r2.NGAY_KQ)) {
-              if (checkTimeOverlap(r1.NGAY_TH_YL, r1.NGAY_KQ, r2.NGAY_TH_YL, r2.NGAY_KQ)) {
-                const scope1 = r1.MA_LK === r2.MA_LK ? `cùng BN (${fmtBN(r1)})` : `BN khác: ${fmtBN(r2)}`;
-                const scope2 = r1.MA_LK === r2.MA_LK ? `cùng BN (${fmtBN(r2)})` : `BN khác: ${fmtBN(r1)}`;
-                errors.push({
-                  id: Math.random().toString(36).substr(2, 9),
-                  recordId: r1.id,
-                  MA_LK: r1.MA_LK,
-                  MA_DICH_VU: r1.MA_DICH_VU,
-                  NoiDung: `[CHỒNG CHÉO CA] NV '${staffName}' bị chồng giờ (${formatTimeOnly(r1.NGAY_TH_YL)}-${formatTimeOnly(r1.NGAY_KQ)}) với ${scope1}. DV bị chồng: '${r2.TEN_DICH_VU}'`,
-                  Loai: 'heavy'
-                });
-                errors.push({
-                  id: Math.random().toString(36).substr(2, 9),
-                  recordId: r2.id,
-                  MA_LK: r2.MA_LK,
-                  MA_DICH_VU: r2.MA_DICH_VU,
-                  NoiDung: `[CHỒNG CHÉO CA] NV '${staffName}' bị chồng giờ (${formatTimeOnly(r2.NGAY_TH_YL)}-${formatTimeOnly(r2.NGAY_KQ)}) với ${scope2}. DV bị chồng: '${r1.TEN_DICH_VU}'`,
-                  Loai: 'heavy'
-                });
+          if (!eitherAllowed && r1.MA_LK !== r2.MA_LK) {
+            // Nếu cùng mã DV hoặc cùng nhóm (2 ký tự đầu) → cho phép chồng (dịch vụ nhóm)
+            const sameServiceGroup = r1.MA_DICH_VU === r2.MA_DICH_VU || 
+              r1.MA_DICH_VU.substring(0, 2) === r2.MA_DICH_VU.substring(0, 2);
+            if (!sameServiceGroup) {
+              // Bỏ qua exact match (đã bắt ở 2a/2b) để tránh double error
+              if (!checkExactMatch(r1.NGAY_TH_YL, r2.NGAY_TH_YL) && !checkExactMatch(r1.NGAY_KQ, r2.NGAY_KQ)) {
+                if (checkTimeOverlap(r1.NGAY_TH_YL, r1.NGAY_KQ, r2.NGAY_TH_YL, r2.NGAY_KQ)) {
+                  errors.push({
+                    id: Math.random().toString(36).substr(2, 9),
+                    recordId: r1.id,
+                    MA_LK: r1.MA_LK,
+                    MA_DICH_VU: r1.MA_DICH_VU,
+                    NoiDung: `[CHỒNG CHÉO CA] NV '${staffName}' bị chồng giờ (${formatTimeOnly(r1.NGAY_TH_YL)}-${formatTimeOnly(r1.NGAY_KQ)}) với BN khác: ${fmtBN(r2)}. DV bị chồng: '${r2.TEN_DICH_VU}'`,
+                    Loai: 'heavy'
+                  });
+                  errors.push({
+                    id: Math.random().toString(36).substr(2, 9),
+                    recordId: r2.id,
+                    MA_LK: r2.MA_LK,
+                    MA_DICH_VU: r2.MA_DICH_VU,
+                    NoiDung: `[CHỒNG CHÉO CA] NV '${staffName}' bị chồng giờ (${formatTimeOnly(r2.NGAY_TH_YL)}-${formatTimeOnly(r2.NGAY_KQ)}) với BN khác: ${fmtBN(r1)}. DV bị chồng: '${r1.TEN_DICH_VU}'`,
+                    Loai: 'heavy'
+                  });
+                }
               }
             }
           }
