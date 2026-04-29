@@ -554,7 +554,8 @@ export default function App() {
       
       const startTime = rec.NGAY_TH_YL || rec.NGAY_Y_LENH;
       
-      if (executors.size === 0 || !startTime || !rec.NGAY_KQ) return;
+      const isBedService = rec.TEN_DICH_VU.toLowerCase().includes('giường');
+      if (executors.size === 0 || !startTime || !rec.NGAY_KQ || isBedService) return;
       
       executors.forEach(staffId => {
       let staffName = staffId;
