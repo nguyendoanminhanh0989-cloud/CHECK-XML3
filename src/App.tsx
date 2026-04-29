@@ -613,67 +613,73 @@ export default function App() {
     const exportData: any[] = [];
     
     Object.values(staffTime).forEach(st => {
-      const minutes = Array.from(st.overtimeSet).sort();
-      if (minutes.length === 0) return;
-      
-      let startMin = minutes[0];
-      let prevMin = minutes[0];
-      let intervalMins = 1;
-      
-      const getTime = (str: string) => {
-        return new Date(
-          parseInt(str.substring(0,4)),
-          parseInt(str.substring(5,7)) - 1,
-          parseInt(str.substring(8,10)),
-          parseInt(str.substring(11,13)),
-          parseInt(str.substring(14,16))
-        ).getTime();
-      };
+      const processSet = (set: Set<string>, isOvertime: boolean) => {
+        const minutes = Array.from(set).sort();
+        if (minutes.length === 0) return;
+        
+        let startMin = minutes[0];
+        let prevMin = minutes[0];
+        let intervalMins = 1;
+        
+        const getTime = (str: string) => {
+          return new Date(
+            parseInt(str.substring(0,4)),
+            parseInt(str.substring(5,7)) - 1,
+            parseInt(str.substring(8,10)),
+            parseInt(str.substring(11,13)),
+            parseInt(str.substring(14,16))
+          ).getTime();
+        };
 
-      const pushInterval = (sMin: string, eMin: string, count: number) => {
-        const dateStr = sMin.substring(8,10) + '/' + sMin.substring(5,7) + '/' + sMin.substring(0,4);
-        const sTime = sMin.substring(11,16);
-        
-        const endDate = new Date(getTime(eMin) + 60000);
-        const eTimeDisplay = endDate.getHours().toString().padStart(2, '0') + ':' + endDate.getMinutes().toString().padStart(2, '0');
-        
-        const hours = Math.round((count / 60) * 100) / 100;
-        
-        const h = parseInt(sTime.substring(0, 2));
-        let session = 'Sáng';
-        if (h >= 11 && h <= 14) session = 'Trưa';
-        else if (h >= 15 && h < 17) session = 'Chiều';
-        else if (h >= 17) session = 'Tối';
-        
-        exportData.push({
-          'Họ Tên': st.name,
-          'CCHN': st.cchn,
-          'Số giờ tăng ca': hours,
-          'Thời gian bắt đầu': sTime,
-          'Thời gian kết thúc': eTimeDisplay,
-          'Buổi': session,
-          'Ngày': dateStr
-        });
-      };
-
-      for (let i = 1; i <= minutes.length; i++) {
-        const curr = minutes[i];
-        const dPrev = getTime(prevMin);
-        const dCurr = curr ? getTime(curr) : 0;
-        
-        if (!curr || dCurr - dPrev > 60000) {
-          pushInterval(startMin, prevMin, intervalMins);
+        const pushInterval = (sMin: string, eMin: string, count: number) => {
+          const dateStr = sMin.substring(8,10) + '/' + sMin.substring(5,7) + '/' + sMin.substring(0,4);
+          const sTime = sMin.substring(11,16);
           
-          if (curr) {
-            startMin = curr;
+          const endDate = new Date(getTime(eMin) + 60000);
+          const eTimeDisplay = endDate.getHours().toString().padStart(2, '0') + ':' + endDate.getMinutes().toString().padStart(2, '0');
+          
+          const hours = Math.round((count / 60) * 100) / 100;
+          
+          const h = parseInt(sTime.substring(0, 2));
+          let session = 'Sáng';
+          if (h >= 11 && h <= 14) session = 'Trưa';
+          else if (h >= 15 && h < 17) session = 'Chiều';
+          else if (h >= 17) session = 'Tối';
+          
+          exportData.push({
+            'Họ Tên': st.name,
+            'CCHN': st.cchn,
+            'Số giờ': hours,
+            'Thời gian bắt đầu': sTime,
+            'Thời gian kết thúc': eTimeDisplay,
+            'Loại': isOvertime ? 'Tăng ca' : 'Hành chính',
+            'Buổi': session,
+            'Ngày': dateStr
+          });
+        };
+
+        for (let i = 1; i <= minutes.length; i++) {
+          const curr = minutes[i];
+          const dPrev = getTime(prevMin);
+          const dCurr = curr ? getTime(curr) : 0;
+          
+          if (!curr || dCurr - dPrev > 60000) {
+            pushInterval(startMin, prevMin, intervalMins);
+            
+            if (curr) {
+              startMin = curr;
+              prevMin = curr;
+              intervalMins = 1;
+            }
+          } else {
             prevMin = curr;
-            intervalMins = 1;
+            intervalMins++;
           }
-        } else {
-          prevMin = curr;
-          intervalMins++;
         }
-      }
+      };
+
+      processSet(st.regularSet, false);
+      processSet(st.overtimeSet, true);
     });
     
     if (exportData.length === 0) {
