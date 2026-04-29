@@ -1,8 +1,8 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { 
-  UploadCloud, FileSpreadsheet, AlertTriangle, CheckCircle2, Download, Trash2, Settings2,
-  Search, Filter, ShieldCheck, Database, Users, Activity, Server, Play, Lock, LogOut, Loader2, Cloud
+  UploadCloud, FileSpreadsheet, AlertTriangle, CheckCircle2, Download, Trash2, Settings,
+  Search, Filter, ShieldCheck, Database, Users, Activity, Server, Play, Lock, LogOut, Loader2, Cloud, Clock
 } from 'lucide-react';
 import { DVKTRecord, ErrorLog, ValidationConfig, Staff, Machine, ServiceCatalog } from './types';
 import { validateRecords } from './validator';
@@ -29,6 +29,42 @@ const defaultConfig: ValidationConfig = {
   serviceCatalog: []
 };
 
+const TimeInput24h = ({ value, onChange, label }: { value: string, onChange: (v: string) => void, label: string }) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let val = e.target.value.replace(/[^0-9:]/g, '');
+    if (val.length === 2 && !val.includes(':') && (e.nativeEvent as InputEvent).inputType !== 'deleteContentBackward') {
+      val += ':';
+    }
+    onChange(val);
+  };
+  
+  const handleBlur = () => {
+    let [h, m] = value.split(':');
+    h = h || '00';
+    m = m || '00';
+    h = h.padStart(2, '0');
+    m = m.padStart(2, '0');
+    if (parseInt(h) > 23) h = '23';
+    if (parseInt(m) > 59) m = '59';
+    onChange(`${h}:${m}`);
+  };
+
+  return (
+    <div className="w-full space-y-1">
+      <label className="text-[10px] text-emerald-600 font-bold uppercase">{label}</label>
+      <input 
+        type="text" 
+        maxLength={5}
+        placeholder="HH:mm"
+        className="text-xs p-2 border border-emerald-200 rounded-lg w-full font-mono focus:ring-2 focus:ring-emerald-400 outline-none text-center tracking-widest" 
+        value={value} 
+        onChange={handleChange}
+        onBlur={handleBlur}
+      />
+    </div>
+  );
+};
+
 export default function App() {
   // Auth State
   const [clinicCode, setClinicCode] = useState<string | null>(null);
@@ -51,6 +87,8 @@ export default function App() {
   const [showConfig, setShowConfig] = useState(false);
   const [newStaffCchn, setNewStaffCchn] = useState('');
   const [newStaffName, setNewStaffName] = useState('');
+  const [editingService, setEditingService] = useState<ServiceCatalog | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const staffInputRef = useRef<HTMLInputElement>(null);
@@ -178,6 +216,9 @@ export default function App() {
   const updateConfig = async (newConfig: ValidationConfig) => {
     setConfig(newConfig);
     localStorage.setItem('check_xml_config_v3', JSON.stringify(newConfig));
+    setSaveSuccess(true);
+    setTimeout(() => setSaveSuccess(false), 2000);
+
     if (clinicCode && clinicCode !== 'GUEST') {
       setIsSyncing(true);
       const { error } = await supabase.from('clinics').update({ config: newConfig }).eq('id', clinicCode);
@@ -206,14 +247,18 @@ export default function App() {
       strVal = String(val);
     }
     
-    const str = String(strVal).trim();
-    if (str.length === 12 && !isNaN(Number(str))) {
+    let str = String(strVal).replace(/[\u200B-\u200D\uFEFF]/g, '').trim().replace(/^['"‘’“”]+|['"‘’“”]+$/g, '');
+    
+    // Trích xuất 12 số liên tiếp nếu có (VD: "202604280950", "'202604280950", "202604280950.0")
+    const match12 = str.match(/(?:^|\D)(\d{12})(?:\D|$)/);
+    if (match12 && match12[1]) {
+      const cleanStr = match12[1];
       return new Date(
-        parseInt(str.substring(0,4)),
-        parseInt(str.substring(4,6))-1,
-        parseInt(str.substring(6,8)),
-        parseInt(str.substring(8,10)),
-        parseInt(str.substring(10,12))
+        parseInt(cleanStr.substring(0,4)),
+        parseInt(cleanStr.substring(4,6))-1,
+        parseInt(cleanStr.substring(6,8)),
+        parseInt(cleanStr.substring(8,10)),
+        parseInt(cleanStr.substring(10,12))
       );
     }
     
@@ -251,14 +296,17 @@ export default function App() {
     const rowKeys = Object.keys(row);
     const normalize = (s: string) => {
       if (!s) return '';
-      return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[\s_\-\/\\]/g, '');
+      return s.normalize("NFD").replace(/[\u0300-\u036f\u200B-\u200D\uFEFF]/g, "").toLowerCase().replace(/[\s_\-\/\\]/g, '');
     };
     // Lặp theo thứ tự ưu tiên của names (tên đầu tiên = ưu tiên cao nhất)
     for (const name of names) {
       const normName = normalize(name);
       for (const key of rowKeys) {
         if (normalize(key) === normName) {
-          return row[key];
+          const val = row[key];
+          if (val !== undefined && val !== null && String(val).trim() !== '') {
+            return val;
+          }
         }
       }
     }
@@ -302,9 +350,9 @@ export default function App() {
             HO_TEN: String(getCol(row, ['HO_TEN', 'TEN_BENH_NHAN', 'Họ tên người bệnh', 'Họ và tên người bệnh', 'HoTen', 'TEN_BN', 'Tên BN', 'Họ tên']) || '').trim(),
             MA_DICH_VU: maDV,
             TEN_DICH_VU: tenDV,
-            NGAY_YL: parseDateString(getCol(row, ['NGAYGIO_YL', 'NGAY_YL', 'NGAY_Y_LENH', 'ThoiGianYLenh', 'Ngày Y lệnh', 'Thời gian Y lệnh', 'Thời gian chỉ định', 'Ngày chỉ định'])),
-            NGAY_TH_YL: parseDateString(getCol(row, ['NGAYGIO_TH_YL', 'NGAY_TH_YL', 'NGAY_TH', 'NGAY_THUC_HIEN', 'NGAYGIO_TH', 'ThoiGianThucHien', 'Ngày thực hiện', 'Thời gian thực hiện', 'Ngày giờ thủ thuật', 'Ngày thủ thuật'])),
-            NGAY_KQ: parseDateString(getCol(row, ['NGAYGIO_KQ', 'NGAY_KQ', 'NGAY_KT', 'NGAY_KET_QUA', 'NGAY_KET_THUC', 'ThoiGianKetQua', 'Ngày kết quả', 'Ngày kết thúc', 'Thời gian kết thúc', 'Ngày giờ kết quả'])),
+            NGAY_YL: parseDateString(getCol(row, ['NGAYGIO_YL', 'NGAY_YL', 'NGAY_Y_LENH', 'ThoiGianYLenh', 'THOIGIAN_YL', 'Ngày Y lệnh', 'Thời gian Y lệnh', 'Thời gian chỉ định', 'Ngày chỉ định'])),
+            NGAY_TH_YL: parseDateString(getCol(row, ['NGAYGIO_TH_YL', 'NGAY_TH_YL', 'NGAY_TH', 'NGAY_THUC_HIEN', 'NGAY_GIO_THUC_HIEN', 'NGAYGIO_TH', 'ThoiGianThucHien', 'THOIGIAN_TH', 'Ngày thực hiện', 'Thời gian thực hiện', 'Ngày giờ thủ thuật', 'Ngày thủ thuật'])),
+            NGAY_KQ: parseDateString(getCol(row, ['NGAYGIO_KQ', 'NGAY_KQ', 'NGAY_KT', 'NGAY_KET_QUA', 'NGAY_GIO_KET_QUA', 'NGAY_KET_THUC', 'ThoiGianKetQua', 'THOIGIAN_KQ', 'Ngày kết quả', 'Ngày kết thúc', 'Thời gian kết thúc', 'Ngày giờ kết quả'])),
             MA_BAC_SI: String(getCol(row, ['MA_BAC_SI', 'NguoiChiDinh', 'Bác sĩ', 'Mã Bác Sĩ', 'Bác sĩ thủ thuật']) || '').trim().toUpperCase(),
             NGUOI_THUC_HIEN: String(getCol(row, ['NGUOI_THUC_HIEN', 'NguoiThucHien', 'Người thực hiện', 'MACCHN', 'CCHN', 'Bác sĩ thủ thuật', 'Bác sĩ/Nhân viên thực hiện', 'Bác sĩ nhân viên thực hiện']) || '').trim().toUpperCase(),
             MA_MAY: String(getCol(row, ['MA_MAY_3176', 'MA_MAY', 'MaMay', 'Mã máy']) || '').trim().toUpperCase(),
@@ -389,7 +437,16 @@ export default function App() {
         code: String(getCol(r, ['MA_DICH_VU', 'MA_DVKT', 'Mã DV', 'MaDVKT', 'MA_TUONG_DUONG']) || '').trim().toUpperCase(),
         name: String(getCol(r, ['TEN_DICH_VU', 'TEN_DVKT', 'Tên DVKT', 'TEN_DVKT_PHEDUYET', 'TEN_DVKT_GIA']) || '').trim(),
         allowStaffOverlap: Boolean(getCol(r, ['CHO_PHEP_NV_TRUNG', 'ChoPhepTrung', 'AllowStaffOverlap'])),
-        noMachineRequired: Boolean(getCol(r, ['KHONG_CAN_MAY', 'KhongCanMay', 'NoMachineRequired']))
+        noMachineRequired: Boolean(getCol(r, ['KHONG_CAN_MAY', 'KhongCanMay', 'NoMachineRequired'])),
+        totalTime: Number(getCol(r, ['TONG_THOI_GIAN', 'TongThoiGian', 'TotalTime'])) || undefined,
+        operationTime: Number(getCol(r, ['T_GIAN_THAO_TAC', 'ThoiGianThaoTac', 'OperationTime'])) || undefined,
+        bedTime: Number(getCol(r, ['T_GIAN_GIU_GIUONG', 'ThoiGianGiuGiuong', 'BedTime'])) || undefined,
+        equipmentCapacity: Number(getCol(r, ['SUC_CHUA_THIET_BI', 'SucChuaThietBi', 'EquipmentCapacity'])) || undefined,
+        requireSeparateEquipment: Boolean(getCol(r, ['YEU_CAU_THIET_BI_RIENG', 'ThietBiRieng', 'RequireSeparateEquipment'])),
+        occupyStaffFully: Boolean(getCol(r, ['CHIEM_TRON_NHAN_VIEN', 'ChiemNhanVien', 'OccupyStaffFully'])),
+        forbidOverlap: Boolean(getCol(r, ['CAM_LONG_KET_QUA', 'CamLong', 'ForbidOverlap'])),
+        allowOverlapWith: String(getCol(r, ['CHO_PHEP_LONG_VOI', 'ChoPhepLong', 'AllowOverlapWith']) || '').split(',').map(s => s.trim().toUpperCase()).filter(s => s),
+        forbidOverlapWith: String(getCol(r, ['CAM_LONG_VOI', 'CamLongVoi', 'ForbidOverlapWith']) || '').split(',').map(s => s.trim().toUpperCase()).filter(s => s)
       })).filter(x => x.code && x.code !== 'UNDEFINED' && x.code !== '');
       // MERGE: giữ danh mục cũ, thêm mới (ghi đè nếu trùng code)
       const merged = [...config.serviceCatalog];
@@ -485,6 +542,149 @@ export default function App() {
     if (errBN.length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(errBN), "8. Chồng Chéo BN");
 
     XLSX.writeFile(wb, `Bao_Cao_Doi_Chieu_${new Date().getTime()}.xlsx`);
+  };
+
+  const handleExportTimekeeping = () => {
+    const staffTime: Record<string, { name: string, cchn: string, regularSet: Set<string>, overtimeSet: Set<string> }> = {};
+    
+    records.forEach(rec => {
+      const executors = new Set<string>();
+      if (rec.NGUOI_THUC_HIEN) executors.add(rec.NGUOI_THUC_HIEN);
+      if (rec.BAC_SI_Y_LENH) executors.add(rec.BAC_SI_Y_LENH);
+      
+      const startTime = rec.NGAY_TH_YL || rec.NGAY_Y_LENH;
+      
+      if (executors.size === 0 || !startTime || !rec.NGAY_KQ) return;
+      
+      executors.forEach(staffId => {
+      let staffName = staffId;
+      let cchn = staffId;
+      
+      if (config.staffCatalog) {
+        const norm = (s: string) => s.normalize('NFC').replace(/[\u00A0\u200B\u200C\u200D\uFEFF]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
+        const normS = (s: string) => s.normalize('NFC').replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF]/g, '').toUpperCase();
+        const v = norm(staffId);
+        const vS = normS(staffId);
+        const staff = (config.staffCatalog.find(s => norm(s.cchn) === v || norm(s.name) === v) || (vS.length >= 3 ? config.staffCatalog.find(s => normS(s.cchn) === vS || normS(s.name) === vS) : undefined));
+        
+        if (staff) {
+          staffName = staff.name || staffId;
+          cchn = staff.cchn || staffId;
+        }
+      }
+      
+      if (!staffTime[staffId]) {
+        staffTime[staffId] = { name: staffName, cchn: cchn, regularSet: new Set(), overtimeSet: new Set() };
+      }
+      
+      const start = startTime.getTime();
+      const end = rec.NGAY_KQ.getTime();
+      
+      const pMorningStart = config.operatingHours.morningStart.split(':').map(Number);
+      const mS = pMorningStart[0] * 60 + pMorningStart[1];
+      const pMorningEnd = config.operatingHours.morningEnd.split(':').map(Number);
+      const mE = pMorningEnd[0] * 60 + pMorningEnd[1];
+      const pAfternoonStart = config.operatingHours.afternoonStart.split(':').map(Number);
+      const aS = pAfternoonStart[0] * 60 + pAfternoonStart[1];
+      const pAfternoonEnd = config.operatingHours.afternoonEnd.split(':').map(Number);
+      const aE = pAfternoonEnd[0] * 60 + pAfternoonEnd[1];
+
+      for (let t = start; t < end; t += 60000) {
+        const d = new Date(t);
+        const dayStr = d.toISOString().split('T')[0];
+        const h = d.getHours();
+        const m = d.getMinutes();
+        const timeNum = h * 60 + m;
+        
+        const isMorning = timeNum >= mS && timeNum < mE;
+        const isAfternoon = timeNum >= aS && timeNum < aE;
+        
+        const minKey = `${dayStr} ${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+        
+        if (isMorning || isAfternoon) {
+          staffTime[staffId].regularSet.add(minKey);
+        } else {
+          staffTime[staffId].overtimeSet.add(minKey);
+        }
+      }
+      });
+    });
+
+    const exportData: any[] = [];
+    
+    Object.values(staffTime).forEach(st => {
+      const minutes = Array.from(st.overtimeSet).sort();
+      if (minutes.length === 0) return;
+      
+      let startMin = minutes[0];
+      let prevMin = minutes[0];
+      let intervalMins = 1;
+      
+      const getTime = (str: string) => {
+        return new Date(
+          parseInt(str.substring(0,4)),
+          parseInt(str.substring(5,7)) - 1,
+          parseInt(str.substring(8,10)),
+          parseInt(str.substring(11,13)),
+          parseInt(str.substring(14,16))
+        ).getTime();
+      };
+
+      const pushInterval = (sMin: string, eMin: string, count: number) => {
+        const dateStr = sMin.substring(8,10) + '/' + sMin.substring(5,7) + '/' + sMin.substring(0,4);
+        const sTime = sMin.substring(11,16);
+        
+        const endDate = new Date(getTime(eMin) + 60000);
+        const eTimeDisplay = endDate.getHours().toString().padStart(2, '0') + ':' + endDate.getMinutes().toString().padStart(2, '0');
+        
+        const hours = Math.round((count / 60) * 100) / 100;
+        
+        const h = parseInt(sTime.substring(0, 2));
+        let session = 'Sáng';
+        if (h >= 11 && h <= 14) session = 'Trưa';
+        else if (h >= 15 && h < 17) session = 'Chiều';
+        else if (h >= 17) session = 'Tối';
+        
+        exportData.push({
+          'Họ Tên': st.name,
+          'CCHN': st.cchn,
+          'Số giờ tăng ca': hours,
+          'Thời gian bắt đầu': sTime,
+          'Thời gian kết thúc': eTimeDisplay,
+          'Buổi': session,
+          'Ngày': dateStr
+        });
+      };
+
+      for (let i = 1; i <= minutes.length; i++) {
+        const curr = minutes[i];
+        const dPrev = getTime(prevMin);
+        const dCurr = curr ? getTime(curr) : 0;
+        
+        if (!curr || dCurr - dPrev > 60000) {
+          pushInterval(startMin, prevMin, intervalMins);
+          
+          if (curr) {
+            startMin = curr;
+            prevMin = curr;
+            intervalMins = 1;
+          }
+        } else {
+          prevMin = curr;
+          intervalMins++;
+        }
+      }
+    });
+    
+    if (exportData.length === 0) {
+      alert("Không có dữ liệu chấm công hợp lệ (yêu cầu các bản ghi có Thời gian Y Lệnh và Thực Hiện).");
+      return;
+    }
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "ChamCong");
+    XLSX.writeFile(wb, `ChamCong_NhanVien_${new Date().getTime()}.xlsx`);
   };
 
   const filteredRecords = useMemo(() => {
@@ -732,6 +932,15 @@ export default function App() {
           >
             <Download size={18} />
           </button>
+          
+          <button 
+            onClick={handleExportTimekeeping}
+            disabled={records.length === 0}
+            className="flex items-center justify-center p-2.5 bg-blue-600 border border-blue-500 hover:bg-blue-700 text-white rounded-xl transition-all disabled:opacity-50 shadow-md"
+            title="Xuất File Chấm Công"
+          >
+            <Clock size={18} />
+          </button>
 
           <button 
             onClick={() => { setRecords([]); setErrors([]); }}
@@ -779,33 +988,24 @@ export default function App() {
               <div>
                 <div className="flex items-center justify-between mb-3 pl-1">
                   <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Cấu Hình Ràng Buộc</h3>
-                  <button onClick={() => setShowConfig(!showConfig)} className="text-emerald-500 hover:text-emerald-600 bg-emerald-50 hover:bg-emerald-100 p-1.5 rounded-lg transition-colors">
-                    <Settings2 size={16} />
+                  <button onClick={() => setShowConfig(!showConfig)} className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-1.5 rounded-lg transition-colors border border-emerald-100">
+                    <Settings size={14} /> Cài Đặt Giờ Hành Chính
                   </button>
                 </div>
                 
                 {showConfig && (
                   <div className="mb-4 p-4 bg-emerald-50/50 border border-emerald-100 rounded-xl space-y-3 shadow-inner">
-                    <h4 className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Cài Đặt Giờ Hành Chính (Lưu Trên Cloud)</h4>
-                    <div className="flex gap-3">
-                      <div className="w-full space-y-1">
-                        <label className="text-[10px] text-emerald-600 font-bold uppercase">Sáng Bắt Đầu</label>
-                        <input type="time" className="text-xs p-2 border border-emerald-200 rounded-lg w-full font-mono focus:ring-2 focus:ring-emerald-400 outline-none" value={config.operatingHours.morningStart} onChange={e => updateConfig({...config, operatingHours: {...config.operatingHours, morningStart: e.target.value}})} />
-                      </div>
-                      <div className="w-full space-y-1">
-                        <label className="text-[10px] text-emerald-600 font-bold uppercase">Sáng Kết Thúc</label>
-                        <input type="time" className="text-xs p-2 border border-emerald-200 rounded-lg w-full font-mono focus:ring-2 focus:ring-emerald-400 outline-none" value={config.operatingHours.morningEnd} onChange={e => updateConfig({...config, operatingHours: {...config.operatingHours, morningEnd: e.target.value}})} />
-                      </div>
+                    <div className="flex justify-between items-center">
+                      <h4 className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Cài Đặt Giờ Hành Chính (Lưu Trên Cloud)</h4>
+                      {saveSuccess && <span className="text-[10px] text-emerald-600 font-bold bg-emerald-100 px-2 py-0.5 rounded animate-pulse">✓ Đã lưu tự động</span>}
                     </div>
                     <div className="flex gap-3">
-                      <div className="w-full space-y-1">
-                        <label className="text-[10px] text-emerald-600 font-bold uppercase">Chiều Bắt Đầu</label>
-                        <input type="time" className="text-xs p-2 border border-emerald-200 rounded-lg w-full font-mono focus:ring-2 focus:ring-emerald-400 outline-none" value={config.operatingHours.afternoonStart} onChange={e => updateConfig({...config, operatingHours: {...config.operatingHours, afternoonStart: e.target.value}})} />
-                      </div>
-                      <div className="w-full space-y-1">
-                        <label className="text-[10px] text-emerald-600 font-bold uppercase">Chiều Kết Thúc</label>
-                        <input type="time" className="text-xs p-2 border border-emerald-200 rounded-lg w-full font-mono focus:ring-2 focus:ring-emerald-400 outline-none" value={config.operatingHours.afternoonEnd} onChange={e => updateConfig({...config, operatingHours: {...config.operatingHours, afternoonEnd: e.target.value}})} />
-                      </div>
+                      <TimeInput24h label="Sáng Bắt Đầu" value={config.operatingHours.morningStart} onChange={v => updateConfig({...config, operatingHours: {...config.operatingHours, morningStart: v}})} />
+                      <TimeInput24h label="Sáng Kết Thúc" value={config.operatingHours.morningEnd} onChange={v => updateConfig({...config, operatingHours: {...config.operatingHours, morningEnd: v}})} />
+                    </div>
+                    <div className="flex gap-3">
+                      <TimeInput24h label="Chiều Bắt Đầu" value={config.operatingHours.afternoonStart} onChange={v => updateConfig({...config, operatingHours: {...config.operatingHours, afternoonStart: v}})} />
+                      <TimeInput24h label="Chiều Kết Thúc" value={config.operatingHours.afternoonEnd} onChange={v => updateConfig({...config, operatingHours: {...config.operatingHours, afternoonEnd: v}})} />
                     </div>
                   </div>
                 )}
@@ -878,6 +1078,18 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
+                      {filteredRecords.length > 0 && filteredRecords.some(r => !r.NGAY_YL) && (
+                        <tr className="bg-red-50">
+                          <td colSpan={9} className="p-3">
+                            <div className="text-red-700 text-xs font-mono break-all font-bold">
+                              VUI LÒNG CHỤP LẠI KHUNG ĐỎ NÀY CHO DEVELOPER BỞI VÌ TÊN CỘT TRONG FILE EXCEL ĐANG KHÔNG KHỚP:<br/>
+                              [Danh sách các cột trong file của bạn]: {
+                                Object.keys(filteredRecords.find(r => !r.NGAY_YL)?.originalRow || {}).join(' | ')
+                              }
+                            </div>
+                          </td>
+                        </tr>
+                      )}
                       {filteredRecords.length === 0 ? (
                         <tr>
                           <td colSpan={9} className="px-6 py-28 text-center">
@@ -1092,7 +1304,7 @@ export default function App() {
                         <th className="px-6 py-4 font-bold text-slate-500 text-xs uppercase tracking-wider">Tên Dịch Vụ</th>
                         <th className="px-6 py-4 font-bold text-emerald-600 text-xs text-center w-48 uppercase tracking-wider bg-emerald-50/50">Cho Phép Chồng Giờ</th>
                         <th className="px-6 py-4 font-bold text-amber-600 text-xs text-center w-40 uppercase tracking-wider bg-amber-50/50">Không Cần Máy</th>
-                        <th className="px-3 py-4 font-bold text-red-400 text-xs text-center w-16 uppercase tracking-wider">Xóa</th>
+                        <th className="px-3 py-4 font-bold text-slate-400 text-xs text-center w-24 uppercase tracking-wider">Hành động</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -1154,12 +1366,17 @@ export default function App() {
                                   </div>
                                 </td>
                                 <td className="px-3 py-3 text-center">
-                                  <button disabled={clinicCode === 'GUEST'} onClick={() => {
-                                    const newCat = config.serviceCatalog.filter(x => x.code !== s.code);
-                                    updateConfig({...config, serviceCatalog: newCat});
-                                  }} className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-lg transition-colors disabled:opacity-30">
-                                    <Trash2 size={14}/>
-                                  </button>
+                                  <div className="flex items-center justify-center gap-2">
+                                    <button disabled={clinicCode === 'GUEST'} onClick={() => setEditingService(s)} className="text-blue-400 hover:text-blue-600 hover:bg-blue-50 p-1.5 rounded-lg transition-colors disabled:opacity-30">
+                                      <Settings2 size={14}/>
+                                    </button>
+                                    <button disabled={clinicCode === 'GUEST'} onClick={() => {
+                                      const newCat = config.serviceCatalog.filter(x => x.code !== s.code);
+                                      updateConfig({...config, serviceCatalog: newCat});
+                                    }} className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-lg transition-colors disabled:opacity-30">
+                                      <Trash2 size={14}/>
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
                             ))}
@@ -1256,6 +1473,56 @@ export default function App() {
           )}
         </div>
       </main>
+
+      {/* MODAL SỬA DVKT */}
+      {editingService && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <div>
+                <h3 className="text-lg font-bold text-slate-800">Cấu hình thời gian & ràng buộc</h3>
+                <p className="text-sm text-slate-500 font-mono mt-1">{editingService.code} - <span className="font-semibold text-slate-700">{editingService.name}</span></p>
+              </div>
+              <button onClick={() => setEditingService(null)} className="text-slate-400 hover:text-red-500 bg-white p-2 rounded-xl shadow-sm border border-slate-200 transition-colors">
+                <Trash2 size={16} /> {/* Temporary close icon */}
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-6">
+              
+              {/* Row 1: Thoi gian co ban */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Tổng thời gian DVKT (Phút)</label>
+                  <input type="number" min="0" value={editingService.totalTime || ''} onChange={(e) => setEditingService({...editingService, totalTime: parseInt(e.target.value) || undefined})} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                  <p className="text-[11px] text-slate-400 mt-1.5">Từ lúc bắt đầu đến khi kết thúc</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">T.Gian thao tác (Không được trùng)</label>
+                  <input type="number" min="0" value={editingService.operationTime || ''} onChange={(e) => setEditingService({...editingService, operationTime: parseInt(e.target.value) || undefined})} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                  <p className="text-[11px] text-slate-400 mt-1.5">Phút đầu NV bận, không thể làm ca khác</p>
+                </div>
+              </div>
+
+
+
+            </div>
+            
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-3">
+              <button onClick={() => setEditingService(null)} className="px-5 py-2.5 text-slate-600 font-medium hover:bg-slate-200 rounded-xl transition-colors">Hủy</button>
+              <button onClick={() => {
+                const newCat = [...config.serviceCatalog];
+                const idx = newCat.findIndex(s => s.code === editingService.code);
+                if (idx > -1) {
+                  newCat[idx] = editingService;
+                  updateConfig({...config, serviceCatalog: newCat});
+                }
+                setEditingService(null);
+              }} className="px-6 py-2.5 bg-emerald-500 text-white font-bold rounded-xl hover:bg-emerald-600 shadow-sm transition-colors">Lưu Cấu Hình</button>
+            </div>
+          </div>
+        </div>
+      )}
       
       <style dangerouslySetInnerHTML={{__html: `
         .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }

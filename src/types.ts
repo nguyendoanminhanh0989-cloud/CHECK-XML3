@@ -37,8 +37,19 @@ export interface Machine {
 export interface ServiceCatalog {
   code: string;
   name: string;
-  allowStaffOverlap: boolean; // DVKT ĐƯỢC PHÉP chồng chéo NV (trong lúc làm DV này, NV được đi làm DV khác)
-  noMachineRequired?: boolean;
+  allowStaffOverlap?: boolean; // Cho phép trùng lặp nhân viên
+  noMachineRequired?: boolean; // Không cần máy móc
+  
+  // Advanced configuration
+  totalTime?: number; // Tổng thời gian DVKT (phút)
+  operationTime?: number; // T.Gian thao tác (không được trùng) (phút)
+  bedTime?: number; // Thời gian giữ giường
+  equipmentCapacity?: number; // Sức chứa thiết bị (BN/lần)
+  requireSeparateEquipment?: boolean; // Yêu cầu thiết bị/máy móc riêng
+  occupyStaffFully?: boolean; // Chiếm trọn vẹn nhân viên
+  forbidOverlap?: boolean; // Cấm lồng kết quả
+  allowOverlapWith?: string[]; // Cho phép lồng vào giờ chờ của (mảng mã DV)
+  forbidOverlapWith?: string[]; // Cấm tuyệt đối lồng vào giờ chờ của (mảng mã DV)
 }
 
 export interface OperatingHours {

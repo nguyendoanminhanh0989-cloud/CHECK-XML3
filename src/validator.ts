@@ -267,25 +267,35 @@ export function validateRecords(records: DVKTRecord[], config: ValidationConfig)
         const r1 = staffRecords[i];
         const r2 = staffRecords[j];
 
-        // *** CHECK: Nếu MỘT TRONG HAI DV được phép chồng (từ danh mục hoặc nhóm XN) => BYPASS TẤT CẢ ***
+        const svc1 = findServiceInCatalog(config.serviceCatalog, r1.MA_DICH_VU);
+        const svc2 = findServiceInCatalog(config.serviceCatalog, r2.MA_DICH_VU);
+
+        // Legacy eitherAllowed (từ Bảng 5 cơ bản hoặc nhóm Xét nghiệm)
         const eitherAllowed = isOverlapAllowed(config.serviceCatalog, r1.MA_DICH_VU) || isOverlapAllowed(config.serviceCatalog, r2.MA_DICH_VU);
+
+        // Xác định "Khoảng thời gian thao tác không được trùng" (Nếu có cài đặt operationTime)
+        // Nếu không cài, thì mặc định lấy toàn bộ [NGAY_TH_YL, NGAY_KQ]
+        let r1OpEnd: Date | null = null;
+        if (svc1?.operationTime && svc1.operationTime > 0 && r1.NGAY_TH_YL) {
+          r1OpEnd = new Date(r1.NGAY_TH_YL.getTime() + svc1.operationTime * 60000);
+        }
+        let r2OpEnd: Date | null = null;
+        if (svc2?.operationTime && svc2.operationTime > 0 && r2.NGAY_TH_YL) {
+          r2OpEnd = new Date(r2.NGAY_TH_YL.getTime() + svc2.operationTime * 60000);
+        }
 
         // 2a. Trùng giờ Thực hiện
         if (config.checkExactTimeTH && r1.NGAY_TH_YL && r2.NGAY_TH_YL && r1.MA_LK !== r2.MA_LK) {
           if (!eitherAllowed && checkExactMatch(r1.NGAY_TH_YL, r2.NGAY_TH_YL)) {
             errors.push({
               id: Math.random().toString(36).substr(2, 9),
-              recordId: r1.id,
-              MA_LK: r1.MA_LK,
-              MA_DICH_VU: r1.MA_DICH_VU,
+              recordId: r1.id, MA_LK: r1.MA_LK, MA_DICH_VU: r1.MA_DICH_VU,
               NoiDung: `[TRÙNG GIỜ TH] NV '${staffName}' thực hiện trùng đúng giờ lúc ${formatTimeOnly(r1.NGAY_TH_YL)} với BN khác. Trùng với: ${fmtBN(r2)} - DV: '${r2.TEN_DICH_VU}'`,
               Loai: 'heavy'
             });
             errors.push({
               id: Math.random().toString(36).substr(2, 9),
-              recordId: r2.id,
-              MA_LK: r2.MA_LK,
-              MA_DICH_VU: r2.MA_DICH_VU,
+              recordId: r2.id, MA_LK: r2.MA_LK, MA_DICH_VU: r2.MA_DICH_VU,
               NoiDung: `[TRÙNG GIỜ TH] NV '${staffName}' thực hiện trùng đúng giờ lúc ${formatTimeOnly(r2.NGAY_TH_YL)} với BN khác. Trùng với: ${fmtBN(r1)} - DV: '${r1.TEN_DICH_VU}'`,
               Loai: 'heavy'
             });
@@ -297,17 +307,13 @@ export function validateRecords(records: DVKTRecord[], config: ValidationConfig)
           if (!eitherAllowed && checkExactMatch(r1.NGAY_KQ, r2.NGAY_KQ)) {
             errors.push({
               id: Math.random().toString(36).substr(2, 9),
-              recordId: r1.id,
-              MA_LK: r1.MA_LK,
-              MA_DICH_VU: r1.MA_DICH_VU,
+              recordId: r1.id, MA_LK: r1.MA_LK, MA_DICH_VU: r1.MA_DICH_VU,
               NoiDung: `[TRÙNG GIỜ KQ] NV '${staffName}' trả kết quả trùng đúng giờ lúc ${formatTimeOnly(r1.NGAY_KQ)} với BN khác. Trùng với: ${fmtBN(r2)} - DV: '${r2.TEN_DICH_VU}'`,
               Loai: 'heavy'
             });
             errors.push({
               id: Math.random().toString(36).substr(2, 9),
-              recordId: r2.id,
-              MA_LK: r2.MA_LK,
-              MA_DICH_VU: r2.MA_DICH_VU,
+              recordId: r2.id, MA_LK: r2.MA_LK, MA_DICH_VU: r2.MA_DICH_VU,
               NoiDung: `[TRÙNG GIỜ KQ] NV '${staffName}' trả kết quả trùng đúng giờ lúc ${formatTimeOnly(r2.NGAY_KQ)} với BN khác. Trùng với: ${fmtBN(r1)} - DV: '${r1.TEN_DICH_VU}'`,
               Loai: 'heavy'
             });
@@ -315,29 +321,42 @@ export function validateRecords(records: DVKTRecord[], config: ValidationConfig)
         }
 
         // 2c. Chồng chéo thời gian (cùng NV, khác BN)
-        // Bypass nếu DV được đánh dấu allowStaffOverlap trong Danh Mục DVKT (Bảng 5) hoặc nhóm XN
-        if (config.checkStaffOverlap && r1.NGAY_TH_YL && r2.NGAY_TH_YL && r1.NGAY_KQ && r2.NGAY_KQ) {
-          if (!eitherAllowed && r1.MA_LK !== r2.MA_LK) {
-            // Bỏ qua exact match (đã bắt ở 2a/2b) để tránh double error
-            if (!checkExactMatch(r1.NGAY_TH_YL, r2.NGAY_TH_YL) && !checkExactMatch(r1.NGAY_KQ, r2.NGAY_KQ)) {
-              if (checkTimeOverlap(r1.NGAY_TH_YL, r1.NGAY_KQ, r2.NGAY_TH_YL, r2.NGAY_KQ)) {
-                errors.push({
-                  id: Math.random().toString(36).substr(2, 9),
-                  recordId: r1.id,
-                  MA_LK: r1.MA_LK,
-                  MA_DICH_VU: r1.MA_DICH_VU,
-                  NoiDung: `[CHỒNG CHÉO CA] NV '${staffName}' bị chồng giờ (${formatTimeOnly(r1.NGAY_TH_YL)}-${formatTimeOnly(r1.NGAY_KQ)}) với BN khác: ${fmtBN(r2)}. DV bị chồng: '${r2.TEN_DICH_VU}'`,
-                  Loai: 'heavy'
-                });
-                errors.push({
-                  id: Math.random().toString(36).substr(2, 9),
-                  recordId: r2.id,
-                  MA_LK: r2.MA_LK,
-                  MA_DICH_VU: r2.MA_DICH_VU,
-                  NoiDung: `[CHỒNG CHÉO CA] NV '${staffName}' bị chồng giờ (${formatTimeOnly(r2.NGAY_TH_YL)}-${formatTimeOnly(r2.NGAY_KQ)}) với BN khác: ${fmtBN(r1)}. DV bị chồng: '${r1.TEN_DICH_VU}'`,
-                  Loai: 'heavy'
-                });
-              }
+        if (config.checkStaffOverlap && r1.NGAY_TH_YL && r2.NGAY_TH_YL && r1.NGAY_KQ && r2.NGAY_KQ && r1.MA_LK !== r2.MA_LK) {
+          // Bỏ qua exact match (đã bắt ở 2a/2b)
+          if (!checkExactMatch(r1.NGAY_TH_YL, r2.NGAY_TH_YL) && !checkExactMatch(r1.NGAY_KQ, r2.NGAY_KQ)) {
+            const isFullOverlap = checkTimeOverlap(r1.NGAY_TH_YL, r1.NGAY_KQ, r2.NGAY_TH_YL, r2.NGAY_KQ);
+            
+            // Nếu có cài đặt Thời gian thao tác -> Kiểm tra CHỒNG CHÉO THAO TÁC NGHIÊM NGẶT
+            let opConflictReason = '';
+            if (r1OpEnd && checkTimeOverlap(r1.NGAY_TH_YL, r1OpEnd, r2.NGAY_TH_YL, r2OpEnd || r2.NGAY_KQ)) {
+              opConflictReason = `Chồng vào thời gian thao tác (${svc1?.operationTime} phút) của DV '${r1.TEN_DICH_VU}'`;
+            } else if (r2OpEnd && checkTimeOverlap(r2.NGAY_TH_YL, r2OpEnd, r1.NGAY_TH_YL, r1OpEnd || r1.NGAY_KQ)) {
+              opConflictReason = `Chồng vào thời gian thao tác (${svc2?.operationTime} phút) của DV '${r2.TEN_DICH_VU}'`;
+            }
+
+            if (opConflictReason) {
+              errors.push({
+                id: Math.random().toString(36).substr(2, 9), recordId: r1.id, MA_LK: r1.MA_LK, MA_DICH_VU: r1.MA_DICH_VU,
+                NoiDung: `[VI PHẠM T.GIAN THAO TÁC] ${opConflictReason}. Bị chồng với BN: ${fmtBN(r2)}`,
+                Loai: 'heavy'
+              });
+              errors.push({
+                id: Math.random().toString(36).substr(2, 9), recordId: r2.id, MA_LK: r2.MA_LK, MA_DICH_VU: r2.MA_DICH_VU,
+                NoiDung: `[VI PHẠM T.GIAN THAO TÁC] ${opConflictReason}. Bị chồng với BN: ${fmtBN(r1)}`,
+                Loai: 'heavy'
+              });
+            } else if (isFullOverlap && !eitherAllowed) {
+              // Fallback nếu không vi phạm thao tác, nhưng lồng chéo cơ bản (và không được phép lồng)
+              errors.push({
+                id: Math.random().toString(36).substr(2, 9), recordId: r1.id, MA_LK: r1.MA_LK, MA_DICH_VU: r1.MA_DICH_VU,
+                NoiDung: `[CHỒNG CHÉO CA] NV '${staffName}' bị chồng giờ (${formatTimeOnly(r1.NGAY_TH_YL)}-${formatTimeOnly(r1.NGAY_KQ)}) với BN khác: ${fmtBN(r2)}. DV bị chồng: '${r2.TEN_DICH_VU}'`,
+                Loai: 'heavy'
+              });
+              errors.push({
+                id: Math.random().toString(36).substr(2, 9), recordId: r2.id, MA_LK: r2.MA_LK, MA_DICH_VU: r2.MA_DICH_VU,
+                NoiDung: `[CHỒNG CHÉO CA] NV '${staffName}' bị chồng giờ (${formatTimeOnly(r2.NGAY_TH_YL)}-${formatTimeOnly(r2.NGAY_KQ)}) với BN khác: ${fmtBN(r1)}. DV bị chồng: '${r1.TEN_DICH_VU}'`,
+                Loai: 'heavy'
+              });
             }
           }
         }
@@ -428,8 +447,12 @@ export function validateRecords(records: DVKTRecord[], config: ValidationConfig)
 
           if (r1.NGAY_TH_YL && r2.NGAY_TH_YL && r1.NGAY_KQ && r2.NGAY_KQ) {
             if (checkTimeOverlap(r1.NGAY_TH_YL, r1.NGAY_KQ, r2.NGAY_TH_YL, r2.NGAY_KQ)) {
-              // Bypass nếu MỘT TRONG HAI DV được phép chồng chéo (XN hoặc từ Danh Mục)
-              const eitherAllowed = isOverlapAllowed(config.serviceCatalog, r1.MA_DICH_VU) || isOverlapAllowed(config.serviceCatalog, r2.MA_DICH_VU);
+              // Bypass nếu MỘT TRONG HAI DV là XN, hoặc CẢ HAI đều được phép chồng chéo (từ Danh Mục)
+              const eitherIsLab = isLabService(r1.MA_DICH_VU) || isLabService(r2.MA_DICH_VU);
+              const svc1 = findServiceInCatalog(config.serviceCatalog, r1.MA_DICH_VU);
+              const svc2 = findServiceInCatalog(config.serviceCatalog, r2.MA_DICH_VU);
+              const bothAllowedFromCatalog = (svc1?.allowStaffOverlap === true) && (svc2?.allowStaffOverlap === true);
+              const shouldBypass = eitherIsLab || bothAllowedFromCatalog;
 
               // Xử lý riêng nhóm 18 (CĐHA): chia thành 2 nhóm con Siêu âm & Chụp
               const r1Img = isImagingService(r1.MA_DICH_VU);
@@ -474,7 +497,7 @@ export function validateRecords(records: DVKTRecord[], config: ValidationConfig)
                 }
               }
 
-              if (eitherAllowed) {
+              if (shouldBypass) {
                 continue; // bypass - DV được danh mục cho phép
               }
 
@@ -484,6 +507,14 @@ export function validateRecords(records: DVKTRecord[], config: ValidationConfig)
                 MA_LK: maLK,
                 MA_DICH_VU: r1.MA_DICH_VU,
                 NoiDung: `[CHỒNG CHÉO BN] BN ${fmtBN(r1)} làm 2 DV bị chồng giờ (${formatTimeOnly(r1.NGAY_TH_YL)}-${formatTimeOnly(r1.NGAY_KQ)}). DV bị chồng: '${r2.TEN_DICH_VU}' (${r2.MA_DICH_VU}) (${formatTimeOnly(r2.NGAY_TH_YL)}-${formatTimeOnly(r2.NGAY_KQ)})`,
+                Loai: 'warning'
+              });
+              errors.push({
+                id: Math.random().toString(36).substr(2, 9),
+                recordId: r2.id,
+                MA_LK: maLK,
+                MA_DICH_VU: r2.MA_DICH_VU,
+                NoiDung: `[CHỒNG CHÉO BN] BN ${fmtBN(r2)} làm 2 DV bị chồng giờ (${formatTimeOnly(r2.NGAY_TH_YL)}-${formatTimeOnly(r2.NGAY_KQ)}). DV bị chồng: '${r1.TEN_DICH_VU}' (${r1.MA_DICH_VU}) (${formatTimeOnly(r1.NGAY_TH_YL)}-${formatTimeOnly(r1.NGAY_KQ)})`,
                 Loai: 'warning'
               });
             }
@@ -518,6 +549,22 @@ export function validateRecords(records: DVKTRecord[], config: ValidationConfig)
           NoiDung: '[SAI LOGIC] Thời gian Thực hiện diễn ra sau thời gian Kết quả',
           Loai: 'heavy'
         });
+      } else if (rec.NGAY_TH_YL && rec.NGAY_KQ) {
+        // Kiểm tra tổng thời gian DVKT
+        const svc = findServiceInCatalog(config.serviceCatalog, rec.MA_DICH_VU);
+        if (svc?.totalTime && svc.totalTime > 0) {
+          const durationMins = (rec.NGAY_KQ.getTime() - rec.NGAY_TH_YL.getTime()) / 60000;
+          if (durationMins < svc.totalTime) {
+            errors.push({
+              id: Math.random().toString(36).substr(2, 9),
+              recordId: rec.id,
+              MA_LK: rec.MA_LK,
+              MA_DICH_VU: rec.MA_DICH_VU,
+              NoiDung: `[T.GIAN QUÁ NGẮN] DV '${rec.TEN_DICH_VU}' yêu cầu tổng thời gian tối thiểu ${svc.totalTime} phút, nhưng thực tế chỉ mất ${Math.round(durationMins)} phút.`,
+              Loai: 'warning'
+            });
+          }
+        }
       }
     }
 
