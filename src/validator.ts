@@ -22,17 +22,20 @@ function fmtBN(rec: DVKTRecord): string {
 
 // Nhóm Xét nghiệm (22, 23, 24) - Tự động được phép trùng/chồng giờ + không cần máy
 function isLabService(maDV: string): boolean {
-  return maDV.startsWith('22') || maDV.startsWith('23') || maDV.startsWith('24');
+  const norm = normCode(maDV);
+  return /^([A-Z]*)(22|23|24)/.test(norm);
 }
 
 // Nhóm Chẩn đoán Hình ảnh (18.xxxx) - Chia thành 2 nhóm con: Siêu âm & Chụp
 function isImagingService(maDV: string): boolean {
-  return maDV.startsWith('18');
+  const norm = normCode(maDV);
+  return /^([A-Z]*)(18)/.test(norm);
 }
 
 // Công khám: mã ngắn dạng XX.XX (ví dụ: 02.03) - Không tính là chồng chéo với CĐHA
 function isExamService(maDV: string): boolean {
-  return /^\d{2}\.\d{2}$/.test(maDV.trim());
+  const norm = normCode(maDV);
+  return /^([A-Z]*)(0[1-9])/.test(norm);
 }
 
 // Phân loại nhóm con CĐHA dựa trên TÊN dịch vụ

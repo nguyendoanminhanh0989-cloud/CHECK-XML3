@@ -1,7 +1,7 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { 
-  UploadCloud, FileSpreadsheet, AlertTriangle, CheckCircle2, Download, Trash2, Settings,
+  UploadCloud, FileSpreadsheet, AlertTriangle, CheckCircle2, Download, Trash2, Settings, Settings2,
   Search, Filter, ShieldCheck, Database, Users, Activity, Server, Play, Lock, LogOut, Loader2, Cloud, Clock
 } from 'lucide-react';
 import { DVKTRecord, ErrorLog, ValidationConfig, Staff, Machine, ServiceCatalog } from './types';
@@ -98,7 +98,17 @@ export default function App() {
   const [config, setConfig] = useState<ValidationConfig>(() => {
     try {
       const saved = localStorage.getItem('check_xml_config_v3');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return { 
+          ...defaultConfig, 
+          ...parsed, 
+          operatingHours: { ...defaultConfig.operatingHours, ...(parsed.operatingHours || {}) },
+          staffCatalog: parsed.staffCatalog || [],
+          serviceCatalog: parsed.serviceCatalog || [],
+          machineCatalog: parsed.machineCatalog || []
+        };
+      }
     } catch (e) { console.error(e); }
     return defaultConfig;
   });
@@ -177,7 +187,15 @@ export default function App() {
         // Đã tồn tại => Tải cấu hình và vào thẳng
         setClinicCode(code);
         localStorage.setItem('clinic_code', code);
-        const fetchedConfig = data?.config || defaultConfig;
+        const rawConfig = data?.config || {};
+        const fetchedConfig = { 
+          ...defaultConfig, 
+          ...rawConfig,
+          operatingHours: { ...defaultConfig.operatingHours, ...(rawConfig.operatingHours || {}) },
+          staffCatalog: rawConfig.staffCatalog || [],
+          serviceCatalog: rawConfig.serviceCatalog || [],
+          machineCatalog: rawConfig.machineCatalog || []
+        };
         setConfig(fetchedConfig);
         localStorage.setItem('check_xml_config_v3', JSON.stringify(fetchedConfig));
         setAuthStatus('auth');
@@ -407,10 +425,18 @@ export default function App() {
       const bstr = evt.target?.result;
       const wb = XLSX.read(bstr, { type: 'binary' });
       const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+      const parseBool = (val: any) => {
+        if (val === true || val === 1) return true;
+        if (typeof val === 'string') {
+          const s = val.trim().toLowerCase();
+          return s === 'true' || s === '1' || s === 'x' || s === 'yes' || s === 'có' || s === 'co';
+        }
+        return false;
+      };
       const newItems = data.map((r: any) => ({
         code: String(getCol(r, ['MA_MAY', 'MaMay', 'Mã máy']) || '').trim().toUpperCase(),
         name: String(getCol(r, ['TEN_TB', 'TEN_MAY', 'Tên máy', 'TenMay', 'KY_HIEU', 'Ký hiệu']) || '').trim(),
-        allowOverlap: Boolean(getCol(r, ['CHO_PHEP_TRUNG', 'ChoPhepTrung', 'AllowOverlap']))
+        allowOverlap: parseBool(getCol(r, ['CHO_PHEP_TRUNG', 'ChoPhepTrung', 'AllowOverlap']))
       })).filter(x => x.code && x.code !== 'UNDEFINED' && x.code !== '');
       // MERGE: giữ danh mục cũ, thêm mới (ghi đè nếu trùng code)
       const merged = [...(config.machineCatalog || [])];
@@ -433,18 +459,26 @@ export default function App() {
       const bstr = evt.target?.result;
       const wb = XLSX.read(bstr, { type: 'binary' });
       const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+      const parseBool = (val: any) => {
+        if (val === true || val === 1) return true;
+        if (typeof val === 'string') {
+          const s = val.trim().toLowerCase();
+          return s === 'true' || s === '1' || s === 'x' || s === 'yes' || s === 'có' || s === 'co';
+        }
+        return false;
+      };
       const newItems = data.map((r: any) => ({
         code: String(getCol(r, ['MA_DICH_VU', 'MA_DVKT', 'Mã DV', 'MaDVKT', 'MA_TUONG_DUONG']) || '').trim().toUpperCase(),
         name: String(getCol(r, ['TEN_DICH_VU', 'TEN_DVKT', 'Tên DVKT', 'TEN_DVKT_PHEDUYET', 'TEN_DVKT_GIA']) || '').trim(),
-        allowStaffOverlap: Boolean(getCol(r, ['CHO_PHEP_NV_TRUNG', 'ChoPhepTrung', 'AllowStaffOverlap'])),
-        noMachineRequired: Boolean(getCol(r, ['KHONG_CAN_MAY', 'KhongCanMay', 'NoMachineRequired'])),
+        allowStaffOverlap: parseBool(getCol(r, ['CHO_PHEP_NV_TRUNG', 'ChoPhepTrung', 'AllowStaffOverlap'])),
+        noMachineRequired: parseBool(getCol(r, ['KHONG_CAN_MAY', 'KhongCanMay', 'NoMachineRequired'])),
         totalTime: Number(getCol(r, ['TONG_THOI_GIAN', 'TongThoiGian', 'TotalTime'])) || undefined,
         operationTime: Number(getCol(r, ['T_GIAN_THAO_TAC', 'ThoiGianThaoTac', 'OperationTime'])) || undefined,
         bedTime: Number(getCol(r, ['T_GIAN_GIU_GIUONG', 'ThoiGianGiuGiuong', 'BedTime'])) || undefined,
         equipmentCapacity: Number(getCol(r, ['SUC_CHUA_THIET_BI', 'SucChuaThietBi', 'EquipmentCapacity'])) || undefined,
-        requireSeparateEquipment: Boolean(getCol(r, ['YEU_CAU_THIET_BI_RIENG', 'ThietBiRieng', 'RequireSeparateEquipment'])),
-        occupyStaffFully: Boolean(getCol(r, ['CHIEM_TRON_NHAN_VIEN', 'ChiemNhanVien', 'OccupyStaffFully'])),
-        forbidOverlap: Boolean(getCol(r, ['CAM_LONG_KET_QUA', 'CamLong', 'ForbidOverlap'])),
+        requireSeparateEquipment: parseBool(getCol(r, ['YEU_CAU_THIET_BI_RIENG', 'ThietBiRieng', 'RequireSeparateEquipment'])),
+        occupyStaffFully: parseBool(getCol(r, ['CHIEM_TRON_NHAN_VIEN', 'ChiemNhanVien', 'OccupyStaffFully'])),
+        forbidOverlap: parseBool(getCol(r, ['CAM_LONG_KET_QUA', 'CamLong', 'ForbidOverlap'])),
         allowOverlapWith: String(getCol(r, ['CHO_PHEP_LONG_VOI', 'ChoPhepLong', 'AllowOverlapWith']) || '').split(',').map(s => s.trim().toUpperCase()).filter(s => s),
         forbidOverlapWith: String(getCol(r, ['CAM_LONG_VOI', 'CamLongVoi', 'ForbidOverlapWith']) || '').split(',').map(s => s.trim().toUpperCase()).filter(s => s)
       })).filter(x => x.code && x.code !== 'UNDEFINED' && x.code !== '');
@@ -721,8 +755,11 @@ export default function App() {
       list = list.filter(x => (x?.code || '').toLowerCase().includes(s) || (x?.name || '').toLowerCase().includes(s));
     }
     const map = new Map<string, ServiceCatalog[]>();
-    list.forEach(s => {
-      const groupCode = (s?.code || '').substring(0, 2) || 'K';
+    const safeList = Array.isArray(list) ? list : [];
+    safeList.forEach(s => {
+      if (!s) return;
+      const codeStr = String(s.code || '');
+      const groupCode = codeStr.substring(0, 2) || 'K';
       if (!map.has(groupCode)) map.set(groupCode, []);
       map.get(groupCode)!.push(s);
     });
@@ -1323,72 +1360,75 @@ export default function App() {
                         groupedFilteredServices.map(([groupCode, services]) => (
                           <React.Fragment key={groupCode}>
                             <tr className="bg-slate-800 border-y border-slate-900 sticky top-[48px] z-[5]">
-                              <td colSpan={4} className="px-6 py-2 text-[11px] font-bold text-white uppercase tracking-wider flex items-center gap-3">
+                              <td colSpan={5} className="px-6 py-2 text-[11px] font-bold text-white uppercase tracking-wider flex items-center gap-3">
                                 <span className="bg-emerald-500/30 text-emerald-300 px-2 py-0.5 rounded">NHÓM {groupCode}</span>
                                 <span className="text-slate-400">({services.length} Dịch Vụ)</span>
                               </td>
                             </tr>
-                            {services.map((s, i) => (
-                              <tr key={`${groupCode}-${i}`} className="hover:bg-slate-50/80 transition-colors">
-                                <td className="px-6 py-3 font-mono text-slate-500 text-xs">{s.code}</td>
-                                <td className="px-6 py-3 text-slate-800 font-medium text-sm">{s.name}</td>
-                                <td className="px-6 py-3 text-center bg-emerald-50/20 border-l border-emerald-50">
-                                  <div className="flex justify-center">
-                                    <label className="relative flex items-center cursor-pointer">
-                                      <input 
-                                        type="checkbox" 
-                                        disabled={clinicCode === 'GUEST'}
-                                        checked={s.allowStaffOverlap} 
-                                        onChange={(e) => {
-                                          const newCat = [...config.serviceCatalog];
-                                          const itemIdx = newCat.findIndex(x => x.code === s.code);
-                                          if(itemIdx > -1) {
-                                            newCat[itemIdx].allowStaffOverlap = e.target.checked;
-                                            updateConfig({...config, serviceCatalog: newCat});
-                                          }
-                                        }}
-                                        className="sr-only peer disabled:cursor-not-allowed"
-                                      />
-                                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
-                                    </label>
-                                  </div>
-                                </td>
-                                <td className="px-6 py-3 text-center bg-amber-50/20 border-l border-amber-50">
-                                  <div className="flex justify-center">
-                                    <label className="relative flex items-center cursor-pointer">
-                                      <input 
-                                        type="checkbox" 
-                                        disabled={clinicCode === 'GUEST'}
-                                        checked={!!s.noMachineRequired} 
-                                        onChange={(e) => {
-                                          const newCat = [...config.serviceCatalog];
-                                          const itemIdx = newCat.findIndex(x => x.code === s.code);
-                                          if(itemIdx > -1) {
-                                            newCat[itemIdx].noMachineRequired = e.target.checked;
-                                            updateConfig({...config, serviceCatalog: newCat});
-                                          }
-                                        }}
-                                        className="sr-only peer disabled:cursor-not-allowed"
-                                      />
-                                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
-                                    </label>
-                                  </div>
-                                </td>
-                                <td className="px-3 py-3 text-center">
-                                  <div className="flex items-center justify-center gap-2">
-                                    <button disabled={clinicCode === 'GUEST'} onClick={() => setEditingService(s)} className="text-blue-400 hover:text-blue-600 hover:bg-blue-50 p-1.5 rounded-lg transition-colors disabled:opacity-30">
-                                      <Settings2 size={14}/>
-                                    </button>
-                                    <button disabled={clinicCode === 'GUEST'} onClick={() => {
-                                      const newCat = config.serviceCatalog.filter(x => x.code !== s.code);
-                                      updateConfig({...config, serviceCatalog: newCat});
-                                    }} className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-lg transition-colors disabled:opacity-30">
-                                      <Trash2 size={14}/>
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            ))}
+                            {services.map((s, i) => {
+                              if (!s) return null;
+                              return (
+                                <tr key={`${groupCode}-${i}`} className="hover:bg-slate-50/80 transition-colors">
+                                  <td className="px-6 py-3 font-mono text-slate-500 text-xs">{String(s?.code || '')}</td>
+                                  <td className="px-6 py-3 text-slate-800 font-medium text-sm">{s?.name || ''}</td>
+                                  <td className="px-6 py-3 text-center bg-emerald-50/20 border-l border-emerald-50">
+                                    <div className="flex justify-center">
+                                      <label className="relative flex items-center cursor-pointer">
+                                        <input 
+                                          type="checkbox" 
+                                          disabled={clinicCode === 'GUEST'}
+                                          checked={!!s?.allowStaffOverlap} 
+                                          onChange={(e) => {
+                                            const newCat = [...config.serviceCatalog];
+                                            const itemIdx = newCat.findIndex(x => x.code === s?.code);
+                                            if(itemIdx > -1) {
+                                              newCat[itemIdx].allowStaffOverlap = e.target.checked;
+                                              updateConfig({...config, serviceCatalog: newCat});
+                                            }
+                                          }}
+                                          className="sr-only peer disabled:cursor-not-allowed"
+                                        />
+                                        <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                                      </label>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-3 text-center bg-amber-50/20 border-l border-amber-50">
+                                    <div className="flex justify-center">
+                                      <label className="relative flex items-center cursor-pointer">
+                                        <input 
+                                          type="checkbox" 
+                                          disabled={clinicCode === 'GUEST'}
+                                          checked={!!s?.noMachineRequired} 
+                                          onChange={(e) => {
+                                            const newCat = [...config.serviceCatalog];
+                                            const itemIdx = newCat.findIndex(x => x.code === s?.code);
+                                            if(itemIdx > -1) {
+                                              newCat[itemIdx].noMachineRequired = e.target.checked;
+                                              updateConfig({...config, serviceCatalog: newCat});
+                                            }
+                                          }}
+                                          className="sr-only peer disabled:cursor-not-allowed"
+                                        />
+                                        <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                                      </label>
+                                    </div>
+                                  </td>
+                                  <td className="px-3 py-3 text-center">
+                                    <div className="flex items-center justify-center gap-2">
+                                      <button disabled={clinicCode === 'GUEST'} onClick={() => setEditingService(s)} className="text-blue-400 hover:text-blue-600 hover:bg-blue-50 p-1.5 rounded-lg transition-colors disabled:opacity-30">
+                                        <Settings2 size={14}/>
+                                      </button>
+                                      <button disabled={clinicCode === 'GUEST'} onClick={() => {
+                                        const newCat = config.serviceCatalog.filter(x => x.code !== s?.code);
+                                        updateConfig({...config, serviceCatalog: newCat});
+                                      }} className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-lg transition-colors disabled:opacity-30">
+                                        <Trash2 size={14}/>
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
                           </React.Fragment>
                         ))
                       )}
