@@ -387,7 +387,7 @@ export default function App() {
         name: String(getCol(r, ['HO_TEN', 'TEN_NV', 'TenNV', 'Tên NV', 'HoTen', 'Họ tên']) || '').trim()
       })).filter(x => x.cchn && x.cchn !== 'UNDEFINED' && x.cchn !== '');
       // MERGE: giữ danh mục cũ, thêm mới
-      const merged = [...config.staffCatalog];
+      const merged = [...(config.staffCatalog || [])];
       newItems.forEach(item => {
         const idx = merged.findIndex(x => x.cchn === item.cchn);
         if (idx > -1) merged[idx] = { ...merged[idx], ...item };
@@ -413,7 +413,7 @@ export default function App() {
         allowOverlap: Boolean(getCol(r, ['CHO_PHEP_TRUNG', 'ChoPhepTrung', 'AllowOverlap']))
       })).filter(x => x.code && x.code !== 'UNDEFINED' && x.code !== '');
       // MERGE: giữ danh mục cũ, thêm mới (ghi đè nếu trùng code)
-      const merged = [...config.machineCatalog];
+      const merged = [...(config.machineCatalog || [])];
       newItems.forEach(item => {
         const idx = merged.findIndex(x => x.code === item.code);
         if (idx > -1) merged[idx] = { ...merged[idx], ...item };
@@ -449,7 +449,7 @@ export default function App() {
         forbidOverlapWith: String(getCol(r, ['CAM_LONG_VOI', 'CamLongVoi', 'ForbidOverlapWith']) || '').split(',').map(s => s.trim().toUpperCase()).filter(s => s)
       })).filter(x => x.code && x.code !== 'UNDEFINED' && x.code !== '');
       // MERGE: giữ danh mục cũ, thêm mới (ghi đè nếu trùng code)
-      const merged = [...config.serviceCatalog];
+      const merged = [...(config.serviceCatalog || [])];
       newItems.forEach(item => {
         const idx = merged.findIndex(x => x.code === item.code);
         if (idx > -1) merged[idx] = { ...merged[idx], ...item };
@@ -708,20 +708,21 @@ export default function App() {
   }, [records, searchTerm]);
 
   const filteredStaffs = useMemo(() => {
-    if (!searchStaff) return config.staffCatalog;
+    const list = config.staffCatalog || [];
+    if (!searchStaff) return list;
     const s = searchStaff.toLowerCase();
-    return config.staffCatalog.filter(x => x.cchn.toLowerCase().includes(s) || x.name.toLowerCase().includes(s));
+    return list.filter(x => (x?.cchn || '').toLowerCase().includes(s) || (x?.name || '').toLowerCase().includes(s));
   }, [config.staffCatalog, searchStaff]);
 
   const groupedFilteredServices = useMemo(() => {
-    let list = config.serviceCatalog;
+    let list = config.serviceCatalog || [];
     if (searchService) {
       const s = searchService.toLowerCase();
-      list = list.filter(x => x.code.toLowerCase().includes(s) || x.name.toLowerCase().includes(s));
+      list = list.filter(x => (x?.code || '').toLowerCase().includes(s) || (x?.name || '').toLowerCase().includes(s));
     }
     const map = new Map<string, ServiceCatalog[]>();
     list.forEach(s => {
-      const groupCode = s.code.substring(0, 2);
+      const groupCode = (s?.code || '').substring(0, 2) || 'K';
       if (!map.has(groupCode)) map.set(groupCode, []);
       map.get(groupCode)!.push(s);
     });
@@ -729,9 +730,10 @@ export default function App() {
   }, [config.serviceCatalog, searchService]);
 
   const filteredMachines = useMemo(() => {
-    if (!searchMachine) return config.machineCatalog;
+    const list = config.machineCatalog || [];
+    if (!searchMachine) return list;
     const s = searchMachine.toLowerCase();
-    return config.machineCatalog.filter(x => x.code.toLowerCase().includes(s) || x.name.toLowerCase().includes(s));
+    return list.filter(x => (x?.code || '').toLowerCase().includes(s) || (x?.name || '').toLowerCase().includes(s));
   }, [config.machineCatalog, searchMachine]);
 
   const NavButton = ({ id, icon: Icon, label }: { id: any, icon: any, label: string }) => (
@@ -1216,7 +1218,7 @@ export default function App() {
                   <button disabled={clinicCode === 'GUEST'} onClick={() => staffInputRef.current?.click()} className="px-5 py-2.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-xl text-sm transition-all shadow-sm font-bold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                     <UploadCloud size={16}/> Tải Danh Mục
                   </button>
-                  {config.staffCatalog.length > 0 && (
+                  {config.staffCatalog && config.staffCatalog.length > 0 && (
                     <button disabled={clinicCode === 'GUEST'} onClick={() => { if(confirm('Xóa TẤT CẢ danh mục Nhân Viên?')) updateConfig({...config, staffCatalog: []}); }} className="px-4 py-2.5 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-xl text-sm transition-all shadow-sm font-bold flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
                       <Trash2 size={14}/> Xóa All
                     </button>
@@ -1294,7 +1296,7 @@ export default function App() {
                   <button disabled={clinicCode === 'GUEST'} onClick={() => serviceInputRef.current?.click()} className="px-5 py-2.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-xl text-sm transition-all shadow-sm font-bold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                     <UploadCloud size={16}/> Tải Bảng 5
                   </button>
-                  {config.serviceCatalog.length > 0 && (
+                  {config.serviceCatalog && config.serviceCatalog.length > 0 && (
                     <button disabled={clinicCode === 'GUEST'} onClick={() => { if(confirm('Xóa TẤT CẢ danh mục DVKT?')) updateConfig({...config, serviceCatalog: []}); }} className="px-4 py-2.5 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-xl text-sm transition-all shadow-sm font-bold flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
                       <Trash2 size={14}/> Xóa All
                     </button>
@@ -1413,7 +1415,7 @@ export default function App() {
                   <button disabled={clinicCode === 'GUEST'} onClick={() => machineInputRef.current?.click()} className="px-5 py-2.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-xl text-sm transition-all shadow-sm font-bold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                     <UploadCloud size={16}/> Tải Bảng 6
                   </button>
-                  {config.machineCatalog.length > 0 && (
+                  {config.machineCatalog && config.machineCatalog.length > 0 && (
                     <button disabled={clinicCode === 'GUEST'} onClick={() => { if(confirm('Xóa TẤT CẢ danh mục Thiết bị?')) updateConfig({...config, machineCatalog: []}); }} className="px-4 py-2.5 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-xl text-sm transition-all shadow-sm font-bold flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
                       <Trash2 size={14}/> Xóa All
                     </button>
