@@ -800,7 +800,7 @@ export default function App() {
 
   if (authStatus === 'unauth') {
     return (
-      <div className="min-h-screen bg-[#f1f6f4] flex items-center justify-center p-4">
+      <div className="min-h-screen flex items-center justify-center p-4" style={{background: 'linear-gradient(135deg, rgba(241,246,244,0.92) 0%, rgba(236,253,245,0.88) 100%), url(/chuyen-doi-so.webp) center/cover no-repeat fixed'}}>
         <div className="bg-white max-w-md w-full p-8 rounded-3xl shadow-xl border border-emerald-100/50">
           <div className="flex flex-col items-center mb-8">
             <div className="bg-gradient-to-br from-emerald-400 to-green-600 p-4 rounded-2xl shadow-lg text-white mb-4">
@@ -924,7 +924,7 @@ export default function App() {
 
   // MAIN APP SCREEN
   return (
-    <div className="min-h-screen bg-[#f1f6f4] text-slate-800 font-sans selection:bg-emerald-200 selection:text-emerald-900 pb-12">
+    <div className="min-h-screen text-slate-800 font-sans selection:bg-emerald-200 selection:text-emerald-900 pb-12" style={{background: 'linear-gradient(135deg, rgba(241,246,244,0.88) 0%, rgba(236,253,245,0.85) 100%), url(/chuyen-doi-so.webp) center/cover no-repeat fixed'}}>
       <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-emerald-100 shadow-sm px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="bg-gradient-to-br from-emerald-400 to-green-600 p-2 rounded-xl shadow-md text-white relative">
